@@ -22,9 +22,9 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 import type { TopPerformer } from "../backend.d";
 import { useActor } from "../hooks/useActor";
+import { XLSX } from "../lib/xlsxShim";
 
 const REQUIRED_COLUMNS = [
   "Rank",
@@ -142,7 +142,7 @@ export default function TopPerformers() {
     setFileName(file.name);
 
     try {
-      let workbook: XLSX.WorkBook;
+      let workbook: any;
       if (file.name.endsWith(".csv")) {
         const text = await file.text();
         workbook = XLSX.read(text, { type: "string" });
@@ -152,7 +152,7 @@ export default function TopPerformers() {
       }
 
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+      const rawRows = XLSX.utils.sheet_to_json(sheet, {
         defval: "",
       });
 

@@ -27,7 +27,10 @@ export const Employee = IDL.Record({
   'name' : IDL.Text,
   'role' : IDL.Text,
   'fseCategory' : IDL.Text,
+  'avatarUrl' : IDL.Text,
   'department' : IDL.Text,
+  'familyDetails' : IDL.Text,
+  'pastExperience' : IDL.Text,
   'fiplCode' : IDL.Text,
 });
 export const FeedbackEntry = IDL.Record({
@@ -67,6 +70,33 @@ export const SalesRecord = IDL.Record({
   'saleDate' : IDL.Text,
   'fiplCode' : IDL.Text,
 });
+export const BatchResult = IDL.Record({
+  'errors' : IDL.Vec(IDL.Text),
+  'successCount' : IDL.Nat,
+  'failCount' : IDL.Nat,
+});
+export const Performance = IDL.Record({
+  'videoCallDemos' : IDL.Nat,
+  'operationalDiscipline' : IDL.Float64,
+  'softSkillsScore' : IDL.Float64,
+  'productKnowledgeScore' : IDL.Float64,
+  'salesInfluenceIndex' : IDL.Float64,
+  'reviewCount' : IDL.Nat,
+  'complaintVisits' : IDL.Nat,
+  'demoVisits' : IDL.Nat,
+  'fiplCode' : IDL.Text,
+});
+export const SWOT = IDL.Record({
+  'weaknesses' : IDL.Vec(IDL.Text),
+  'strengths' : IDL.Vec(IDL.Text),
+  'traits' : IDL.Vec(IDL.Text),
+  'threats' : IDL.Vec(IDL.Text),
+  'opportunities' : IDL.Vec(IDL.Text),
+  'cesScore' : IDL.Float64,
+  'problems' : IDL.Vec(IDL.Text),
+  'feedbacks' : IDL.Vec(IDL.Text),
+  'fiplCode' : IDL.Text,
+});
 export const TopPerformer = IDL.Record({
   'accessories' : IDL.Nat,
   'name' : IDL.Text,
@@ -80,30 +110,11 @@ export const Order = IDL.Variant({
   'equal' : IDL.Null,
   'greater' : IDL.Null,
 });
-export const Performance = IDL.Record({
-  'videoCallDemos' : IDL.Nat,
-  'operationalDiscipline' : IDL.Float64,
-  'softSkillsScore' : IDL.Float64,
-  'productKnowledgeScore' : IDL.Float64,
-  'salesInfluenceIndex' : IDL.Float64,
-  'reviewCount' : IDL.Nat,
-  'complaintVisits' : IDL.Nat,
-  'demoVisits' : IDL.Nat,
-  'fiplCode' : IDL.Text,
-});
 export const DashboardStats = IDL.Record({
   'totalEmployees' : IDL.Nat,
   'totalSalesAmount' : IDL.Float64,
   'activeCount' : IDL.Nat,
   'averageCesScore' : IDL.Float64,
-});
-export const SWOT = IDL.Record({
-  'weaknesses' : IDL.Vec(IDL.Text),
-  'strengths' : IDL.Vec(IDL.Text),
-  'threats' : IDL.Vec(IDL.Text),
-  'opportunities' : IDL.Vec(IDL.Text),
-  'cesScore' : IDL.Float64,
-  'fiplCode' : IDL.Text,
 });
 
 export const idlService = IDL.Service({
@@ -127,9 +138,15 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
+  'batchAttendanceUpload' : IDL.Func([IDL.Vec(Attendance)], [BatchResult], []),
+  'batchEmployeeUpload' : IDL.Func([IDL.Vec(Employee)], [BatchResult], []),
+  'batchFeedbackUpload' : IDL.Func([IDL.Vec(FeedbackEntry)], [BatchResult], []),
+  'batchParametersUpload' : IDL.Func([IDL.Vec(Performance)], [BatchResult], []),
+  'batchSWOTUpload' : IDL.Func([IDL.Vec(SWOT)], [BatchResult], []),
+  'batchSalesUpload' : IDL.Func([IDL.Vec(SalesRecord)], [BatchResult], []),
   'batchTopPerformersUpload' : IDL.Func(
       [IDL.Vec(TopPerformer)],
-      [IDL.Record({ 'successCount' : IDL.Nat, 'failCount' : IDL.Nat })],
+      [BatchResult],
       [],
     ),
   'compareTopPerformersBySales' : IDL.Func(
@@ -137,6 +154,14 @@ export const idlService = IDL.Service({
       [Order],
       ['query'],
     ),
+  'deleteAllAttendance' : IDL.Func([], [], ['oneway']),
+  'deleteAllData' : IDL.Func([], [], []),
+  'deleteAllEmployees' : IDL.Func([], [], ['oneway']),
+  'deleteAllFeedback' : IDL.Func([], [], ['oneway']),
+  'deleteAllPerformances' : IDL.Func([], [], ['oneway']),
+  'deleteAllSWOT' : IDL.Func([], [], ['oneway']),
+  'deleteAllSales' : IDL.Func([], [], ['oneway']),
+  'deleteAllTopPerformers' : IDL.Func([], [], ['oneway']),
   'deleteEmployee' : IDL.Func([IDL.Text], [], []),
   'getActiveEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
   'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
@@ -200,7 +225,10 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'role' : IDL.Text,
     'fseCategory' : IDL.Text,
+    'avatarUrl' : IDL.Text,
     'department' : IDL.Text,
+    'familyDetails' : IDL.Text,
+    'pastExperience' : IDL.Text,
     'fiplCode' : IDL.Text,
   });
   const FeedbackEntry = IDL.Record({
@@ -240,6 +268,33 @@ export const idlFactory = ({ IDL }) => {
     'saleDate' : IDL.Text,
     'fiplCode' : IDL.Text,
   });
+  const BatchResult = IDL.Record({
+    'errors' : IDL.Vec(IDL.Text),
+    'successCount' : IDL.Nat,
+    'failCount' : IDL.Nat,
+  });
+  const Performance = IDL.Record({
+    'videoCallDemos' : IDL.Nat,
+    'operationalDiscipline' : IDL.Float64,
+    'softSkillsScore' : IDL.Float64,
+    'productKnowledgeScore' : IDL.Float64,
+    'salesInfluenceIndex' : IDL.Float64,
+    'reviewCount' : IDL.Nat,
+    'complaintVisits' : IDL.Nat,
+    'demoVisits' : IDL.Nat,
+    'fiplCode' : IDL.Text,
+  });
+  const SWOT = IDL.Record({
+    'weaknesses' : IDL.Vec(IDL.Text),
+    'strengths' : IDL.Vec(IDL.Text),
+    'traits' : IDL.Vec(IDL.Text),
+    'threats' : IDL.Vec(IDL.Text),
+    'opportunities' : IDL.Vec(IDL.Text),
+    'cesScore' : IDL.Float64,
+    'problems' : IDL.Vec(IDL.Text),
+    'feedbacks' : IDL.Vec(IDL.Text),
+    'fiplCode' : IDL.Text,
+  });
   const TopPerformer = IDL.Record({
     'accessories' : IDL.Nat,
     'name' : IDL.Text,
@@ -253,30 +308,11 @@ export const idlFactory = ({ IDL }) => {
     'equal' : IDL.Null,
     'greater' : IDL.Null,
   });
-  const Performance = IDL.Record({
-    'videoCallDemos' : IDL.Nat,
-    'operationalDiscipline' : IDL.Float64,
-    'softSkillsScore' : IDL.Float64,
-    'productKnowledgeScore' : IDL.Float64,
-    'salesInfluenceIndex' : IDL.Float64,
-    'reviewCount' : IDL.Nat,
-    'complaintVisits' : IDL.Nat,
-    'demoVisits' : IDL.Nat,
-    'fiplCode' : IDL.Text,
-  });
   const DashboardStats = IDL.Record({
     'totalEmployees' : IDL.Nat,
     'totalSalesAmount' : IDL.Float64,
     'activeCount' : IDL.Nat,
     'averageCesScore' : IDL.Float64,
-  });
-  const SWOT = IDL.Record({
-    'weaknesses' : IDL.Vec(IDL.Text),
-    'strengths' : IDL.Vec(IDL.Text),
-    'threats' : IDL.Vec(IDL.Text),
-    'opportunities' : IDL.Vec(IDL.Text),
-    'cesScore' : IDL.Float64,
-    'fiplCode' : IDL.Text,
   });
   
   return IDL.Service({
@@ -300,9 +336,27 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
+    'batchAttendanceUpload' : IDL.Func(
+        [IDL.Vec(Attendance)],
+        [BatchResult],
+        [],
+      ),
+    'batchEmployeeUpload' : IDL.Func([IDL.Vec(Employee)], [BatchResult], []),
+    'batchFeedbackUpload' : IDL.Func(
+        [IDL.Vec(FeedbackEntry)],
+        [BatchResult],
+        [],
+      ),
+    'batchParametersUpload' : IDL.Func(
+        [IDL.Vec(Performance)],
+        [BatchResult],
+        [],
+      ),
+    'batchSWOTUpload' : IDL.Func([IDL.Vec(SWOT)], [BatchResult], []),
+    'batchSalesUpload' : IDL.Func([IDL.Vec(SalesRecord)], [BatchResult], []),
     'batchTopPerformersUpload' : IDL.Func(
         [IDL.Vec(TopPerformer)],
-        [IDL.Record({ 'successCount' : IDL.Nat, 'failCount' : IDL.Nat })],
+        [BatchResult],
         [],
       ),
     'compareTopPerformersBySales' : IDL.Func(
@@ -310,6 +364,14 @@ export const idlFactory = ({ IDL }) => {
         [Order],
         ['query'],
       ),
+    'deleteAllAttendance' : IDL.Func([], [], ['oneway']),
+    'deleteAllData' : IDL.Func([], [], []),
+    'deleteAllEmployees' : IDL.Func([], [], ['oneway']),
+    'deleteAllFeedback' : IDL.Func([], [], ['oneway']),
+    'deleteAllPerformances' : IDL.Func([], [], ['oneway']),
+    'deleteAllSWOT' : IDL.Func([], [], ['oneway']),
+    'deleteAllSales' : IDL.Func([], [], ['oneway']),
+    'deleteAllTopPerformers' : IDL.Func([], [], ['oneway']),
     'deleteEmployee' : IDL.Func([IDL.Text], [], []),
     'getActiveEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
     'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),

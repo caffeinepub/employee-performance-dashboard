@@ -20,6 +20,11 @@ export interface Attendance {
   'reason' : string,
   'daysOff' : bigint,
 }
+export interface BatchResult {
+  'errors' : Array<string>,
+  'successCount' : bigint,
+  'failCount' : bigint,
+}
 export interface DashboardStats {
   'totalEmployees' : bigint,
   'totalSalesAmount' : number,
@@ -34,7 +39,10 @@ export interface Employee {
   'name' : string,
   'role' : string,
   'fseCategory' : string,
+  'avatarUrl' : string,
   'department' : string,
+  'familyDetails' : string,
+  'pastExperience' : string,
   'fiplCode' : string,
 }
 export interface FeedbackEntry {
@@ -70,9 +78,12 @@ export interface Performance {
 export interface SWOT {
   'weaknesses' : Array<string>,
   'strengths' : Array<string>,
+  'traits' : Array<string>,
   'threats' : Array<string>,
   'opportunities' : Array<string>,
   'cesScore' : number,
+  'problems' : Array<string>,
+  'feedbacks' : Array<string>,
   'fiplCode' : string,
 }
 export interface SalesRecord {
@@ -115,14 +126,50 @@ export interface _SERVICE {
     { 'ok' : null } |
       { 'err' : string }
   >,
-  'batchTopPerformersUpload' : ActorMethod<
-    [Array<TopPerformer>],
-    { 'successCount' : bigint, 'failCount' : bigint }
-  >,
+  'batchAttendanceUpload' : ActorMethod<[Array<Attendance>], BatchResult>,
+  'batchEmployeeUpload' : ActorMethod<[Array<Employee>], BatchResult>,
+  'batchFeedbackUpload' : ActorMethod<[Array<FeedbackEntry>], BatchResult>,
+  'batchParametersUpload' : ActorMethod<[Array<Performance>], BatchResult>,
+  'batchSWOTUpload' : ActorMethod<[Array<SWOT>], BatchResult>,
+  'batchSalesUpload' : ActorMethod<[Array<SalesRecord>], BatchResult>,
+  'batchTopPerformersUpload' : ActorMethod<[Array<TopPerformer>], BatchResult>,
   'compareTopPerformersBySales' : ActorMethod<
     [TopPerformer, TopPerformer],
     Order
   >,
+  /**
+   * / Delete only attendance records
+   */
+  'deleteAllAttendance' : ActorMethod<[], undefined>,
+  /**
+   * / Delete all data (employees, sales, attendance, SWOT, performance, feedback, top performers)
+   */
+  'deleteAllData' : ActorMethod<[], undefined>,
+  /**
+   * / DELETE OPERATIONS
+   * / Delete all employees and all related data.
+   */
+  'deleteAllEmployees' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only feedback/calling records
+   */
+  'deleteAllFeedback' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only performance/parameters records
+   */
+  'deleteAllPerformances' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only SWOT records
+   */
+  'deleteAllSWOT' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only sales records
+   */
+  'deleteAllSales' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only top performer records
+   */
+  'deleteAllTopPerformers' : ActorMethod<[], undefined>,
   'deleteEmployee' : ActorMethod<[string], undefined>,
   'getActiveEmployees' : ActorMethod<[], Array<Employee>>,
   'getAllEmployees' : ActorMethod<[], Array<Employee>>,

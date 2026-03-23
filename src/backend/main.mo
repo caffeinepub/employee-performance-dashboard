@@ -4,10 +4,13 @@ import Text "mo:core/Text";
 import Float "mo:core/Float";
 import List "mo:core/List";
 import Iter "mo:core/Iter";
+import Array "mo:core/Array";
 import Order "mo:core/Order";
-import Migration "migration";
 
-(with migration = Migration.run)
+import Runtime "mo:core/Runtime";
+
+
+
 actor {
   public type Employee = {
     fiplCode : Text;
@@ -18,6 +21,9 @@ actor {
     status : { #active; #onHold };
     joinDate : Text;
     fseCategory : Text;
+    avatarUrl : Text;
+    familyDetails : Text;
+    pastExperience : Text;
   };
 
   public type Performance = {
@@ -39,6 +45,9 @@ actor {
     opportunities : [Text];
     threats : [Text];
     cesScore : Float;
+    traits : [Text];
+    problems : [Text];
+    feedbacks : [Text];
   };
 
   public type SalesRecord = {
@@ -90,6 +99,12 @@ actor {
     totalSales : Float;
   };
 
+  public type BatchResult = {
+    successCount : Nat;
+    failCount : Nat;
+    errors : [Text];
+  };
+
   let employees = Map.empty<Text, Employee>();
   let performances = Map.empty<Text, Performance>();
   let swots = Map.empty<Text, SWOT>();
@@ -114,7 +129,7 @@ actor {
           func(id) {
             switch (source.get(id)) {
               case (?record) { record };
-              case (null) { assert (false); loop {} };
+              case (null) { Runtime.trap("Record not found") };
             };
           }
         ).toArray();
@@ -131,7 +146,8 @@ actor {
   };
 
   public query ({ caller }) func getTopPerformers() : async [TopPerformer] {
-    let sortedList = topPerformers.values().toArray().sort(
+    let performers = topPerformers.values().toArray();
+    let sortedList = performers.sort(
       func(a, b) {
         Float.compare(b.totalSales, a.totalSales);
       }
@@ -139,23 +155,198 @@ actor {
     sortedList;
   };
 
-  public shared ({ caller }) func batchTopPerformersUpload(records : [TopPerformer]) : async {
-    successCount : Nat;
-    failCount : Nat;
-  } {
+  public shared ({ caller }) func batchTopPerformersUpload(records : [TopPerformer]) : async BatchResult {
     var successCount = 0;
     var failCount = 0;
+    let errorsList = List.empty<Text>();
 
     for (record in records.values()) {
       if (employees.containsKey(record.fiplCode)) {
         topPerformers.add(record.rank, record);
         successCount += 1;
       } else {
+        errorsList.add("Employee does not exist for FIPL " # record.fiplCode);
         failCount += 1;
       };
     };
 
-    { successCount; failCount };
+    {
+      successCount;
+      failCount;
+      errors = errorsList.toArray();
+    };
+  };
+
+  public shared ({ caller }) func batchEmployeeUpload(records : [Employee]) : async BatchResult {
+    var successCount = 0;
+    var failCount = 0;
+    let errorsList = List.empty<Text>();
+
+    for (record in records.values()) {
+      employees.add(record.fiplCode, record);
+      successCount += 1;
+    };
+
+    {
+      successCount;
+      failCount;
+      errors = errorsList.toArray();
+    };
+  };
+
+  public shared ({ caller }) func batchAttendanceUpload(records : [Attendance]) : async BatchResult {
+    var successCount = 0;
+    var failCount = 0;
+    let errorsList = List.empty<Text>();
+
+    for (record in records.values()) {
+      if (not employees.containsKey(record.fiplCode)) {
+        errorsList.add("FIPL does not exist for Attendance " # record.fiplCode);
+        failCount += 1;
+      } else {
+        let newRecord = { record with recordId = nextAttendanceId };
+        attendanceRecords.add(nextAttendanceId, newRecord);
+
+        let existing = attendanceByFIPL.get(record.fiplCode);
+        switch (existing) {
+          case (null) {
+            let newList = List.empty<Nat>();
+            newList.add(nextAttendanceId);
+            attendanceByFIPL.add(record.fiplCode, newList);
+          };
+          case (?list) {
+            list.add(nextAttendanceId);
+          };
+        };
+
+        nextAttendanceId += 1;
+        successCount += 1;
+      };
+    };
+
+    {
+      successCount;
+      failCount;
+      errors = errorsList.toArray();
+    };
+  };
+
+  public shared ({ caller }) func batchSalesUpload(records : [SalesRecord]) : async BatchResult {
+    var successCount = 0;
+    var failCount = 0;
+    let errorsList = List.empty<Text>();
+
+    for (record in records.values()) {
+      if (not employees.containsKey(record.fiplCode)) {
+        errorsList.add("FIPL does not exist for SalesRecord " # record.fiplCode);
+        failCount += 1;
+      } else {
+        let newRecord = { record with recordId = nextSalesId };
+        salesRecords.add(nextSalesId, newRecord);
+
+        let existing = salesByFIPL.get(record.fiplCode);
+        switch (existing) {
+          case (null) {
+            let newList = List.empty<Nat>();
+            newList.add(nextSalesId);
+            salesByFIPL.add(record.fiplCode, newList);
+          };
+          case (?list) {
+            list.add(nextSalesId);
+          };
+        };
+
+        nextSalesId += 1;
+        successCount += 1;
+      };
+    };
+
+    {
+      successCount;
+      failCount;
+      errors = errorsList.toArray();
+    };
+  };
+
+  public shared ({ caller }) func batchFeedbackUpload(records : [FeedbackEntry]) : async BatchResult {
+    var successCount = 0;
+    var failCount = 0;
+    let errorsList = List.empty<Text>();
+
+    for (record in records.values()) {
+      if (not employees.containsKey(record.fiplCode)) {
+        errorsList.add("FIPL does not exist for Feedback " # record.fiplCode);
+        failCount += 1;
+      } else {
+        let newEntry = { record with entryId = nextFeedbackId };
+        feedbackEntries.add(nextFeedbackId, newEntry);
+
+        let existing = feedbackByFIPL.get(record.fiplCode);
+        switch (existing) {
+          case (null) {
+            let newList = List.empty<Nat>();
+            newList.add(nextFeedbackId);
+            feedbackByFIPL.add(record.fiplCode, newList);
+          };
+          case (?list) {
+            list.add(nextFeedbackId);
+          };
+        };
+
+        nextFeedbackId += 1;
+        successCount += 1;
+      };
+    };
+
+    {
+      successCount;
+      failCount;
+      errors = errorsList.toArray();
+    };
+  };
+
+  public shared ({ caller }) func batchParametersUpload(records : [Performance]) : async BatchResult {
+    var successCount = 0;
+    var failCount = 0;
+    let errorsList = List.empty<Text>();
+
+    for (record in records.values()) {
+      if (not employees.containsKey(record.fiplCode)) {
+        errorsList.add("FIPL does not exist for Performance " # record.fiplCode);
+        failCount += 1;
+      } else {
+        performances.add(record.fiplCode, record);
+        successCount += 1;
+      };
+    };
+
+    {
+      successCount;
+      failCount;
+      errors = errorsList.toArray();
+    };
+  };
+
+  public shared ({ caller }) func batchSWOTUpload(records : [SWOT]) : async BatchResult {
+    var successCount = 0;
+    var failCount = 0;
+    let errorsList = List.empty<Text>();
+
+    for (record in records.values()) {
+      if (not employees.containsKey(record.fiplCode)) {
+        errorsList.add("FIPL does not exist for SWOT " # record.fiplCode);
+        failCount += 1;
+      } else {
+        swots.add(record.fiplCode, record);
+        successCount += 1;
+      };
+    };
+
+    {
+      successCount;
+      failCount;
+      errors = errorsList.toArray();
+    };
   };
 
   public shared ({ caller }) func addEmployee(employee : Employee) : async {
@@ -388,5 +579,76 @@ actor {
       totalSalesAmount;
       averageCesScore;
     };
+  };
+
+  /// DELETE OPERATIONS
+
+  /// Delete all employees and all related data.
+  public func deleteAllEmployees() {
+    // Clear employees
+    employees.clear();
+
+    // Clear related maps
+    performances.clear();
+    swots.clear();
+    salesRecords.clear();
+    attendanceRecords.clear();
+    feedbackEntries.clear();
+    salesByFIPL.clear();
+    attendanceByFIPL.clear();
+    feedbackByFIPL.clear();
+    topPerformers.clear();
+
+    // Reset next IDs
+    nextSalesId := 1;
+    nextAttendanceId := 1;
+    nextFeedbackId := 1;
+  };
+
+  /// Delete only sales records
+  public func deleteAllSales() {
+    salesRecords.clear();
+    salesByFIPL.clear();
+    nextSalesId := 1;
+  };
+
+  /// Delete only attendance records
+  public func deleteAllAttendance() {
+    attendanceRecords.clear();
+    attendanceByFIPL.clear();
+    nextAttendanceId := 1;
+  };
+
+  /// Delete only SWOT records
+  public func deleteAllSWOT() {
+    swots.clear();
+  };
+
+  /// Delete only performance/parameters records
+  public func deleteAllPerformances() {
+    performances.clear();
+  };
+
+  /// Delete only feedback/calling records
+  public func deleteAllFeedback() {
+    feedbackEntries.clear();
+    feedbackByFIPL.clear();
+    nextFeedbackId := 1;
+  };
+
+  /// Delete only top performer records
+  public func deleteAllTopPerformers() {
+    topPerformers.clear();
+  };
+
+  /// Delete all data (employees, sales, attendance, SWOT, performance, feedback, top performers)
+  public shared ({ caller }) func deleteAllData() : async () {
+    deleteAllEmployees();
+    deleteAllSales();
+    deleteAllAttendance();
+    deleteAllSWOT();
+    deleteAllPerformances();
+    deleteAllFeedback();
+    deleteAllTopPerformers();
   };
 };

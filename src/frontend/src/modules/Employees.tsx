@@ -34,14 +34,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, Filter, Plus, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Plus,
+  Search,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Employee } from "../backend.d";
+import { useGoogleSheetEmployees } from "../hooks/useGoogleSheetEmployees";
 import {
   Variant_active_onHold,
   useAddEmployee,
-  useAllEmployees,
   useAttendanceByFIPL,
   useDeleteEmployee,
   usePerformanceByFIPL,
@@ -84,6 +91,9 @@ const EMPTY_EMPLOYEE: Employee = {
   status: Variant_active_onHold.active,
   joinDate: "",
   fseCategory: "",
+  avatarUrl: "",
+  familyDetails: "",
+  pastExperience: "",
 };
 
 function categoryBadgeClass(cat: string) {
@@ -96,14 +106,14 @@ function categoryBadgeClass(cat: string) {
 }
 
 function formatIndianCurrency(amount: number) {
-  if (amount === 0) return "₹0";
+  if (amount === 0) return "\u20b90";
   const s = Math.round(amount).toString();
   const last3 = s.slice(-3);
   const rest = s.slice(0, -3);
   const formatted = rest
     ? `${rest.replace(/(\d)(?=(\d{2})+$)/g, "$1,")},${last3}`
     : last3;
-  return `₹${formatted}`;
+  return `\u20b9${formatted}`;
 }
 
 // Per-employee row that fetches its own data
@@ -140,7 +150,6 @@ function EmployeeRow({
       0,
     );
     const totalRecords = attendance.length;
-    // Simple: working days = records * 30 approx, present = working - daysOff
     const totalWorkingDays = totalRecords * 30;
     const presentDays = totalWorkingDays - totalDaysOff;
     return Math.round((presentDays / totalWorkingDays) * 100);
@@ -229,10 +238,36 @@ export default function Employees({
 }: {
   onSelectEmployee: (fiplCode: string) => void;
 }) {
-  const { data: employees = [], isLoading } = useAllEmployees();
+  const {
+    data: sheetEmployees = [],
+    isLoading,
+    isError,
+  } = useGoogleSheetEmployees();
   const addEmployee = useAddEmployee();
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
+
+  // Convert Google Sheet employees to the Employee type used by the UI
+  const employees: Employee[] = useMemo(
+    () =>
+      sheetEmployees.map((e) => ({
+        fiplCode: e.fiplCode,
+        name: e.name,
+        role: e.role,
+        department: e.department,
+        fseCategory: e.fseCategory,
+        status:
+          e.status.toLowerCase() === "on hold"
+            ? Variant_active_onHold.onHold
+            : Variant_active_onHold.active,
+        joinDate: e.joinDate,
+        avatarUrl: e.avatarUrl,
+        region: e.region,
+        familyDetails: e.familyDetails,
+        pastExperience: e.pastExperience,
+      })),
+    [sheetEmployees],
+  );
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -308,6 +343,18 @@ export default function Employees({
 
   return (
     <div className="space-y-4">
+      {/* Error Banner */}
+      {isError && (
+        <div
+          data-ocid="employees.error_state"
+          className="flex items-center gap-2 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm"
+        >
+          <AlertTriangle size={16} className="shrink-0" />
+          Could not load employee data from Google Sheets. Retrying
+          automatically.
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex gap-2 flex-1 max-w-lg">
@@ -376,7 +423,7 @@ export default function Employees({
                       className="text-center py-12 text-muted-foreground"
                       data-ocid="employees.loading_state"
                     >
-                      Loading employees...
+                      Loading employees from Google Sheets...
                     </TableCell>
                   </TableRow>
                 ) : paginated.length === 0 ? (

@@ -10,10 +10,18 @@ export type Option<T> = Some<T> | None;
 export interface SWOT {
     weaknesses: Array<string>;
     strengths: Array<string>;
+    traits: Array<string>;
     threats: Array<string>;
     opportunities: Array<string>;
     cesScore: number;
+    problems: Array<string>;
+    feedbacks: Array<string>;
     fiplCode: string;
+}
+export interface BatchResult {
+    errors: Array<string>;
+    successCount: bigint;
+    failCount: bigint;
 }
 export interface Attendance {
     date: string;
@@ -59,7 +67,10 @@ export interface Employee {
     name: string;
     role: string;
     fseCategory: string;
+    avatarUrl: string;
     department: string;
+    familyDetails: string;
+    pastExperience: string;
     fiplCode: string;
 }
 export interface FeedbackEntry {
@@ -134,11 +145,47 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    batchTopPerformersUpload(records: Array<TopPerformer>): Promise<{
-        successCount: bigint;
-        failCount: bigint;
-    }>;
+    batchAttendanceUpload(records: Array<Attendance>): Promise<BatchResult>;
+    batchEmployeeUpload(records: Array<Employee>): Promise<BatchResult>;
+    batchFeedbackUpload(records: Array<FeedbackEntry>): Promise<BatchResult>;
+    batchParametersUpload(records: Array<Performance>): Promise<BatchResult>;
+    batchSWOTUpload(records: Array<SWOT>): Promise<BatchResult>;
+    batchSalesUpload(records: Array<SalesRecord>): Promise<BatchResult>;
+    batchTopPerformersUpload(records: Array<TopPerformer>): Promise<BatchResult>;
     compareTopPerformersBySales(a: TopPerformer, b: TopPerformer): Promise<Order>;
+    /**
+     * / Delete only attendance records
+     */
+    deleteAllAttendance(): Promise<void>;
+    /**
+     * / Delete all data (employees, sales, attendance, SWOT, performance, feedback, top performers)
+     */
+    deleteAllData(): Promise<void>;
+    /**
+     * / DELETE OPERATIONS
+     * / Delete all employees and all related data.
+     */
+    deleteAllEmployees(): Promise<void>;
+    /**
+     * / Delete only feedback/calling records
+     */
+    deleteAllFeedback(): Promise<void>;
+    /**
+     * / Delete only performance/parameters records
+     */
+    deleteAllPerformances(): Promise<void>;
+    /**
+     * / Delete only SWOT records
+     */
+    deleteAllSWOT(): Promise<void>;
+    /**
+     * / Delete only sales records
+     */
+    deleteAllSales(): Promise<void>;
+    /**
+     * / Delete only top performer records
+     */
+    deleteAllTopPerformers(): Promise<void>;
     deleteEmployee(fiplCode: string): Promise<void>;
     getActiveEmployees(): Promise<Array<Employee>>;
     getAllEmployees(): Promise<Array<Employee>>;

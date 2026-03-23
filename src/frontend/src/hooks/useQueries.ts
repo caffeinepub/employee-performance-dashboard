@@ -281,6 +281,21 @@ export function useAddFeedback() {
   });
 }
 
+export function useBatchFeedbackUpload() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (records: FeedbackEntry[]) => {
+      if (!actor) throw new Error("No actor");
+      return actor.batchFeedbackUpload(records);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allFeedback"] });
+      qc.invalidateQueries({ queryKey: ["dashboardStats"] });
+    },
+  });
+}
+
 export function useAllFeedback(employeeCodes: string[]) {
   const { actor, isFetching } = useActor();
   return useQuery<FeedbackEntry[]>({

@@ -1,224 +1,346 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, Star, TrendingUp, Users } from "lucide-react";
 import {
-  useAllEmployees,
-  useAllPerformancesSortedBySII,
-  useDashboardStats,
-} from "../hooks/useQueries";
-import { Variant_active_onHold } from "../hooks/useQueries";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  Lightbulb,
+  PauseCircle,
+  RefreshCw,
+  Trophy,
+  Users,
+} from "lucide-react";
+import {
+  STATIC_ISSUES,
+  STATIC_SUGGESTIONS,
+} from "../data/staticIssuesSuggestions";
+import type { StaticEntry } from "../data/staticIssuesSuggestions";
+import { useGoogleSheetData } from "../hooks/useGoogleSheetData";
+
+function formatLastRefreshed(date: Date | null): string {
+  if (!date) return "Never";
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 10) return "Just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  return `${diffHr}h ago`;
+}
 
 function StatCard({
   title,
   value,
-  sub,
   icon: Icon,
   loading,
+  accent,
 }: {
   title: string;
   value: string;
-  sub?: string;
   icon: React.ElementType;
   loading?: boolean;
+  accent?: string;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <Skeleton className="h-8 w-24" />
-        ) : (
-          <>
-            <div className="text-2xl font-bold">{value}</div>
-            {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-          </>
-        )}
+    <Card className="flex-1">
+      <CardContent className="pt-5 pb-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">
+              {title}
+            </p>
+            {loading ? (
+              <Skeleton className="h-8 w-20 mt-1" />
+            ) : (
+              <p
+                className={`text-3xl font-bold ${accent ?? "text-foreground"}`}
+              >
+                {value}
+              </p>
+            )}
+          </div>
+          <div
+            className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              accent ? "bg-current/10" : "bg-muted"
+            }`}
+          >
+            <Icon size={20} className={accent ?? "text-muted-foreground"} />
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
 }
 
-export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useDashboardStats();
-  const { data: employees = [] } = useAllEmployees();
-  const { data: performances = [], isLoading: perfLoading } =
-    useAllPerformancesSortedBySII();
-
-  // Build a name lookup from employees
-  const nameMap = Object.fromEntries(
-    employees.map((e) => [e.fiplCode, e.name]),
+function PriorityBadge({ priority }: { priority?: StaticEntry["priority"] }) {
+  if (!priority) return null;
+  const styles = {
+    high: "bg-red-100 text-red-700 border-red-300",
+    medium: "bg-amber-100 text-amber-700 border-amber-300",
+    low: "bg-slate-100 text-slate-600 border-slate-300",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold border shrink-0 capitalize ${styles[priority]}`}
+    >
+      {priority}
+    </span>
   );
-  const onHoldCount = employees.filter(
-    (e) => e.status === Variant_active_onHold.onHold,
-  ).length;
+}
 
-  // Department distribution
-  const deptCounts = employees.reduce<Record<string, number>>((acc, e) => {
-    acc[e.department] = (acc[e.department] || 0) + 1;
-    return acc;
-  }, {});
-  const topDepts = Object.entries(deptCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-  const maxDeptCount = topDepts[0]?.[1] || 1;
+function getRankBadge(rank: number) {
+  if (rank === 1)
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-300">
+        🥇 1
+      </span>
+    );
+  if (rank === 2)
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300">
+        🥈 2
+      </span>
+    );
+  if (rank === 3)
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
+        🥉 3
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
+      {rank}
+    </span>
+  );
+}
 
-  // Region distribution
-  const regionCounts = employees.reduce<Record<string, number>>((acc, e) => {
-    acc[e.region] = (acc[e.region] || 0) + 1;
-    return acc;
-  }, {});
+function getRankRowClass(rank: number) {
+  if (rank === 1) return "bg-amber-50/60";
+  if (rank === 2) return "bg-slate-50/60";
+  if (rank === 3) return "bg-orange-50/60";
+  return "";
+}
+
+export default function Dashboard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading, isFetching, isError } = useGoogleSheetData();
+
+  const activeCount = data?.activeCount ?? 0;
+  const onHoldCount = data?.onHoldCount ?? 0;
+  const totalCount = data?.totalCount ?? 0;
+  const topPerformers = data?.topPerformers ?? [];
+
+  function handleRefresh() {
+    queryClient.invalidateQueries({ queryKey: ["allEmployeeData"] });
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">
-          Employee performance overview
-        </p>
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isFetching}
+            data-ocid="dashboard.primary_button"
+            className="gap-2"
+          >
+            <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
+            Refresh
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              Employee performance at a glance
+            </p>
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Last updated:{" "}
+          <span className="font-medium">
+            {formatLastRefreshed(data?.lastRefreshed ?? null)}
+          </span>
+        </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Employees"
-          value={stats ? stats.totalEmployees.toString() : "—"}
-          sub={`${onHoldCount} on hold`}
-          icon={Users}
-          loading={statsLoading}
-        />
+      {/* Error Banner */}
+      {isError && (
+        <div
+          data-ocid="dashboard.error_state"
+          className="flex items-center gap-2 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm"
+        >
+          <AlertTriangle size={16} className="shrink-0" />
+          Could not load data from Google Sheets. Retrying automatically.
+        </div>
+      )}
+
+      {/* Stat Cards */}
+      <div className="flex gap-4">
         <StatCard
           title="Active Employees"
-          value={stats ? stats.activeCount.toString() : "—"}
-          sub={
-            stats
-              ? `${Math.round((Number(stats.activeCount) / Math.max(Number(stats.totalEmployees), 1)) * 100)}% of total`
-              : undefined
-          }
+          value={isLoading ? "—" : activeCount.toString()}
           icon={Activity}
-          loading={statsLoading}
+          loading={isLoading}
+          accent="text-emerald-600"
         />
         <StatCard
-          title="Total Sales Revenue"
-          value={stats ? `₹${stats.totalSalesAmount.toLocaleString()}` : "—"}
-          icon={TrendingUp}
-          loading={statsLoading}
+          title="On Hold Employees"
+          value={isLoading ? "—" : onHoldCount.toString()}
+          icon={PauseCircle}
+          loading={isLoading}
+          accent="text-amber-600"
         />
         <StatCard
-          title="Avg CES Score"
-          value={stats ? stats.averageCesScore.toFixed(2) : "—"}
-          sub="Across all feedback"
-          icon={Star}
-          loading={statsLoading}
+          title="Total Employees"
+          value={isLoading ? "—" : totalCount.toString()}
+          icon={Users}
+          loading={isLoading}
         />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* SII Leaderboard */}
+      {/* Employee Directory: Top 10 Performers */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Trophy size={16} className="text-amber-500" />
+            Employee Directory — Top 10 Performers
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="space-y-3 p-4">
+              {["a", "b", "c", "d", "e"].map((k) => (
+                <Skeleton key={k} className="h-10" />
+              ))}
+            </div>
+          ) : topPerformers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
+              <Trophy size={32} className="opacity-20 mb-2" />
+              No performers data yet. Upload via the Top Performers module.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40">
+                    <TableHead className="text-xs w-14">Rank</TableHead>
+                    <TableHead className="text-xs">Name</TableHead>
+                    <TableHead className="text-xs">FIPL Code</TableHead>
+                    <TableHead className="text-xs">Region</TableHead>
+                    <TableHead className="text-xs text-right">
+                      Accessories
+                    </TableHead>
+                    <TableHead className="text-xs text-right">
+                      Ext. Warranty
+                    </TableHead>
+                    <TableHead className="text-xs text-right">
+                      Total Sales (₹)
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {topPerformers.map((p, i) => {
+                    const rank = p.rank || i + 1;
+                    return (
+                      <TableRow
+                        key={p.fiplCode}
+                        className={getRankRowClass(rank)}
+                        data-ocid={`dashboard.item.${i + 1}`}
+                      >
+                        <TableCell>{getRankBadge(rank)}</TableCell>
+                        <TableCell className="font-medium text-sm">
+                          {p.name}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {p.fiplCode}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {p.region || (
+                            <span className="text-muted-foreground text-xs">
+                              N/A
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-right">
+                          {p.accessories.toLocaleString("en-IN")}
+                        </TableCell>
+                        <TableCell className="text-sm text-right">
+                          {p.extendedWarranty.toLocaleString("en-IN")}
+                        </TableCell>
+                        <TableCell className="text-sm text-right font-semibold">
+                          ₹{p.totalSales.toLocaleString("en-IN")}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Bottom: Issues + Suggestions (static, manually maintained) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Issues */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Top Performers by Sales Influence Index
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <AlertCircle size={16} className="text-destructive" />
+              Issues
             </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Manually maintained — edit{" "}
+              <code className="text-xs bg-muted px-1 rounded">
+                data/staticIssuesSuggestions.ts
+              </code>{" "}
+              to update
+            </p>
           </CardHeader>
           <CardContent>
-            {perfLoading ? (
-              <div className="space-y-3">
-                {["a", "b", "c", "d", "e"].map((k) => (
-                  <Skeleton key={k} className="h-10" />
-                ))}
+            {STATIC_ISSUES.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm"
+                data-ocid="dashboard.empty_state"
+              >
+                <AlertCircle size={28} className="opacity-20 mb-2" />
+                No issues added yet
               </div>
-            ) : performances.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                No performance data yet
-              </p>
             ) : (
-              <div className="space-y-3">
-                {performances.slice(0, 8).map((p, i) => (
-                  <div key={p.fiplCode} className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-muted-foreground w-5">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-medium truncate">
-                          {nameMap[p.fiplCode] || p.fiplCode}
-                        </span>
-                        <span className="text-sm font-bold ml-2">
-                          {p.salesInfluenceIndex.toFixed(1)}
-                        </span>
-                      </div>
-                      <Progress
-                        value={(p.salesInfluenceIndex / 10) * 100}
-                        className="h-1.5"
-                      />
-                    </div>
-                    {i === 0 && <Badge className="text-xs">Top</Badge>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Department Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Department Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {topDepts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                No employee data yet
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {topDepts.map(([dept, count]) => (
-                  <div key={dept} className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground truncate">
-                        {dept || "Unassigned"}
-                      </span>
-                      <span className="font-medium ml-2">{count}</span>
-                    </div>
-                    <Progress
-                      value={(count / maxDeptCount) * 100}
-                      className="h-2"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Region Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Region Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {Object.keys(regionCounts).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                No data yet
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {Object.entries(regionCounts).map(([region, count]) => (
+              <div className="space-y-2">
+                {STATIC_ISSUES.map((entry) => (
                   <div
-                    key={region}
-                    className="text-center p-3 bg-muted/40 rounded-lg"
+                    key={entry.id}
+                    className="p-3 rounded-lg border border-destructive/20 bg-destructive/5"
                   >
-                    <p className="text-xl font-bold">{count}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {region || "Unknown"}
-                    </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {entry.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {entry.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {entry.date}
+                        </p>
+                      </div>
+                      <PriorityBadge priority={entry.priority} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -226,54 +348,56 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Performance Snapshot */}
+        {/* Suggestions */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Performance Snapshot</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Lightbulb size={16} className="text-amber-500" />
+              Suggestions
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Manually maintained — edit{" "}
+              <code className="text-xs bg-muted px-1 rounded">
+                data/staticIssuesSuggestions.ts
+              </code>{" "}
+              to update
+            </p>
           </CardHeader>
           <CardContent>
-            {performances.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                No performance data yet
-              </p>
+            {STATIC_SUGGESTIONS.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm"
+                data-ocid="dashboard.empty_state"
+              >
+                <Lightbulb size={28} className="opacity-20 mb-2" />
+                No suggestions added yet
+              </div>
             ) : (
-              <div className="space-y-3">
-                {(
-                  [
-                    [
-                      "Avg Product Knowledge",
-                      performances.reduce(
-                        (s, p) => s + p.productKnowledgeScore,
-                        0,
-                      ) / performances.length,
-                    ],
-                    [
-                      "Avg Soft Skills",
-                      performances.reduce((s, p) => s + p.softSkillsScore, 0) /
-                        performances.length,
-                    ],
-                    [
-                      "Avg Operational Discipline",
-                      performances.reduce(
-                        (s, p) => s + p.operationalDiscipline,
-                        0,
-                      ) / performances.length,
-                    ],
-                    [
-                      "Avg Sales Influence Index",
-                      performances.reduce(
-                        (s, p) => s + p.salesInfluenceIndex,
-                        0,
-                      ) / performances.length,
-                    ],
-                  ] as [string, number][]
-                ).map(([label, avg]) => (
-                  <div key={label} className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{label}</span>
-                      <span className="font-medium">{avg.toFixed(1)}</span>
+              <div className="space-y-2">
+                {STATIC_SUGGESTIONS.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50"
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">
+                          {entry.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {entry.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {entry.date}
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="text-xs shrink-0 border-emerald-300 text-emerald-700"
+                      >
+                        Suggestion
+                      </Badge>
                     </div>
-                    <Progress value={(avg / 10) * 100} className="h-2" />
                   </div>
                 ))}
               </div>
