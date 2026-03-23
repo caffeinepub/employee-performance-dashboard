@@ -5,9 +5,9 @@ import Float "mo:core/Float";
 import List "mo:core/List";
 import Iter "mo:core/Iter";
 import Order "mo:core/Order";
+import Migration "migration";
 
-
-
+(with migration = Migration.run)
 actor {
   public type Employee = {
     fiplCode : Text;
@@ -81,12 +81,22 @@ actor {
     averageCesScore : Float;
   };
 
+  public type TopPerformer = {
+    rank : Nat;
+    fiplCode : Text;
+    name : Text;
+    accessories : Nat;
+    extendedWarranty : Nat;
+    totalSales : Float;
+  };
+
   let employees = Map.empty<Text, Employee>();
   let performances = Map.empty<Text, Performance>();
   let swots = Map.empty<Text, SWOT>();
   let salesRecords = Map.empty<Nat, SalesRecord>();
   let attendanceRecords = Map.empty<Nat, Attendance>();
   let feedbackEntries = Map.empty<Nat, FeedbackEntry>();
+  let topPerformers = Map.empty<Nat, TopPerformer>();
 
   let salesByFIPL = Map.empty<Text, List.List<Nat>>();
   let attendanceByFIPL = Map.empty<Text, List.List<Nat>>();
@@ -114,6 +124,38 @@ actor {
 
   func comparePerformanceBySii(a : Performance, b : Performance) : Order.Order {
     Float.compare(b.salesInfluenceIndex, a.salesInfluenceIndex);
+  };
+
+  public query ({ caller }) func compareTopPerformersBySales(a : TopPerformer, b : TopPerformer) : async Order.Order {
+    Float.compare(b.totalSales, a.totalSales);
+  };
+
+  public query ({ caller }) func getTopPerformers() : async [TopPerformer] {
+    let sortedList = topPerformers.values().toArray().sort(
+      func(a, b) {
+        Float.compare(b.totalSales, a.totalSales);
+      }
+    );
+    sortedList;
+  };
+
+  public shared ({ caller }) func batchTopPerformersUpload(records : [TopPerformer]) : async {
+    successCount : Nat;
+    failCount : Nat;
+  } {
+    var successCount = 0;
+    var failCount = 0;
+
+    for (record in records.values()) {
+      if (employees.containsKey(record.fiplCode)) {
+        topPerformers.add(record.rank, record);
+        successCount += 1;
+      } else {
+        failCount += 1;
+      };
+    };
+
+    { successCount; failCount };
   };
 
   public shared ({ caller }) func addEmployee(employee : Employee) : async {

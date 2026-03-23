@@ -67,6 +67,19 @@ export const SalesRecord = IDL.Record({
   'saleDate' : IDL.Text,
   'fiplCode' : IDL.Text,
 });
+export const TopPerformer = IDL.Record({
+  'accessories' : IDL.Nat,
+  'name' : IDL.Text,
+  'rank' : IDL.Nat,
+  'totalSales' : IDL.Float64,
+  'extendedWarranty' : IDL.Nat,
+  'fiplCode' : IDL.Text,
+});
+export const Order = IDL.Variant({
+  'less' : IDL.Null,
+  'equal' : IDL.Null,
+  'greater' : IDL.Null,
+});
 export const Performance = IDL.Record({
   'videoCallDemos' : IDL.Nat,
   'operationalDiscipline' : IDL.Float64,
@@ -114,6 +127,16 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
+  'batchTopPerformersUpload' : IDL.Func(
+      [IDL.Vec(TopPerformer)],
+      [IDL.Record({ 'successCount' : IDL.Nat, 'failCount' : IDL.Nat })],
+      [],
+    ),
+  'compareTopPerformersBySales' : IDL.Func(
+      [TopPerformer, TopPerformer],
+      [Order],
+      ['query'],
+    ),
   'deleteEmployee' : IDL.Func([IDL.Text], [], []),
   'getActiveEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
   'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
@@ -141,6 +164,7 @@ export const idlService = IDL.Service({
     ),
   'getSWOTByFIPL' : IDL.Func([IDL.Text], [IDL.Opt(SWOT)], ['query']),
   'getSalesByFIPL' : IDL.Func([IDL.Text], [IDL.Vec(SalesRecord)], ['query']),
+  'getTopPerformers' : IDL.Func([], [IDL.Vec(TopPerformer)], ['query']),
   'updateEmployee' : IDL.Func([Employee], [], []),
   'upsertPerformance' : IDL.Func(
       [Performance],
@@ -216,6 +240,19 @@ export const idlFactory = ({ IDL }) => {
     'saleDate' : IDL.Text,
     'fiplCode' : IDL.Text,
   });
+  const TopPerformer = IDL.Record({
+    'accessories' : IDL.Nat,
+    'name' : IDL.Text,
+    'rank' : IDL.Nat,
+    'totalSales' : IDL.Float64,
+    'extendedWarranty' : IDL.Nat,
+    'fiplCode' : IDL.Text,
+  });
+  const Order = IDL.Variant({
+    'less' : IDL.Null,
+    'equal' : IDL.Null,
+    'greater' : IDL.Null,
+  });
   const Performance = IDL.Record({
     'videoCallDemos' : IDL.Nat,
     'operationalDiscipline' : IDL.Float64,
@@ -263,6 +300,16 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
+    'batchTopPerformersUpload' : IDL.Func(
+        [IDL.Vec(TopPerformer)],
+        [IDL.Record({ 'successCount' : IDL.Nat, 'failCount' : IDL.Nat })],
+        [],
+      ),
+    'compareTopPerformersBySales' : IDL.Func(
+        [TopPerformer, TopPerformer],
+        [Order],
+        ['query'],
+      ),
     'deleteEmployee' : IDL.Func([IDL.Text], [], []),
     'getActiveEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
     'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
@@ -290,6 +337,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getSWOTByFIPL' : IDL.Func([IDL.Text], [IDL.Opt(SWOT)], ['query']),
     'getSalesByFIPL' : IDL.Func([IDL.Text], [IDL.Vec(SalesRecord)], ['query']),
+    'getTopPerformers' : IDL.Func([], [IDL.Vec(TopPerformer)], ['query']),
     'updateEmployee' : IDL.Func([Employee], [], []),
     'upsertPerformance' : IDL.Func(
         [Performance],

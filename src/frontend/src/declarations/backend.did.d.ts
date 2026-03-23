@@ -53,6 +53,9 @@ export interface FeedbackEntry {
   'product' : string,
   'fiplCode' : string,
 }
+export type Order = { 'less' : null } |
+  { 'equal' : null } |
+  { 'greater' : null };
 export interface Performance {
   'videoCallDemos' : bigint,
   'operationalDiscipline' : number,
@@ -87,6 +90,14 @@ export interface SalesRecord {
   'saleDate' : string,
   'fiplCode' : string,
 }
+export interface TopPerformer {
+  'accessories' : bigint,
+  'name' : string,
+  'rank' : bigint,
+  'totalSales' : number,
+  'extendedWarranty' : bigint,
+  'fiplCode' : string,
+}
 export interface _SERVICE {
   'addAttendance' : ActorMethod<
     [Attendance],
@@ -104,6 +115,14 @@ export interface _SERVICE {
     { 'ok' : null } |
       { 'err' : string }
   >,
+  'batchTopPerformersUpload' : ActorMethod<
+    [Array<TopPerformer>],
+    { 'successCount' : bigint, 'failCount' : bigint }
+  >,
+  'compareTopPerformersBySales' : ActorMethod<
+    [TopPerformer, TopPerformer],
+    Order
+  >,
   'deleteEmployee' : ActorMethod<[string], undefined>,
   'getActiveEmployees' : ActorMethod<[], Array<Employee>>,
   'getAllEmployees' : ActorMethod<[], Array<Employee>>,
@@ -115,6 +134,7 @@ export interface _SERVICE {
   'getPerformanceByFIPL' : ActorMethod<[string], [] | [Performance]>,
   'getSWOTByFIPL' : ActorMethod<[string], [] | [SWOT]>,
   'getSalesByFIPL' : ActorMethod<[string], Array<SalesRecord>>,
+  'getTopPerformers' : ActorMethod<[], Array<TopPerformer>>,
   'updateEmployee' : ActorMethod<[Employee], undefined>,
   'upsertPerformance' : ActorMethod<
     [Performance],

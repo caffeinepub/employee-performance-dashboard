@@ -9,6 +9,7 @@ import Employees from "./modules/Employees";
 import Feedback from "./modules/Feedback";
 import SalesTrends from "./modules/SalesTrends";
 import { Settings } from "./modules/Settings";
+import TopPerformers from "./modules/TopPerformers";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +46,8 @@ function AppContent() {
         return <SalesTrends />;
       case "feedback":
         return <Feedback />;
+      case "uploads":
+        return <TopPerformers />;
       case "settings":
         return <Settings />;
     }

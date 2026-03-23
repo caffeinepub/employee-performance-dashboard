@@ -34,14 +34,12 @@ export interface Performance {
     demoVisits: bigint;
     fiplCode: string;
 }
-export interface Employee {
-    region: string;
-    status: Variant_active_onHold;
-    joinDate: string;
+export interface TopPerformer {
+    accessories: bigint;
     name: string;
-    role: string;
-    fseCategory: string;
-    department: string;
+    rank: bigint;
+    totalSales: number;
+    extendedWarranty: bigint;
     fiplCode: string;
 }
 export interface SalesRecord {
@@ -52,6 +50,16 @@ export interface SalesRecord {
     amount: number;
     product: string;
     saleDate: string;
+    fiplCode: string;
+}
+export interface Employee {
+    region: string;
+    status: Variant_active_onHold;
+    joinDate: string;
+    name: string;
+    role: string;
+    fseCategory: string;
+    department: string;
     fiplCode: string;
 }
 export interface FeedbackEntry {
@@ -71,6 +79,11 @@ export interface DashboardStats {
     totalSalesAmount: number;
     activeCount: bigint;
     averageCesScore: number;
+}
+export enum Order {
+    less = "less",
+    equal = "equal",
+    greater = "greater"
 }
 export enum Variant_accessories_extendedWarranty {
     accessories = "accessories",
@@ -121,6 +134,11 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    batchTopPerformersUpload(records: Array<TopPerformer>): Promise<{
+        successCount: bigint;
+        failCount: bigint;
+    }>;
+    compareTopPerformersBySales(a: TopPerformer, b: TopPerformer): Promise<Order>;
     deleteEmployee(fiplCode: string): Promise<void>;
     getActiveEmployees(): Promise<Array<Employee>>;
     getAllEmployees(): Promise<Array<Employee>>;
@@ -132,6 +150,7 @@ export interface backendInterface {
     getPerformanceByFIPL(fiplCode: string): Promise<Performance | null>;
     getSWOTByFIPL(fiplCode: string): Promise<SWOT | null>;
     getSalesByFIPL(fiplCode: string): Promise<Array<SalesRecord>>;
+    getTopPerformers(): Promise<Array<TopPerformer>>;
     updateEmployee(employee: Employee): Promise<void>;
     upsertPerformance(performance: Performance): Promise<{
         __kind__: "ok";

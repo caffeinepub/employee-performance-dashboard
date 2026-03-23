@@ -5,6 +5,7 @@ import {
   Settings,
   ShieldCheck,
   TrendingUp,
+  Trophy,
   Users,
 } from "lucide-react";
 import { getAvatarColor, getInitials } from "../lib/dateUtils";
@@ -14,6 +15,7 @@ export type Module =
   | "employees"
   | "sales"
   | "feedback"
+  | "uploads"
   | "settings";
 
 interface SidebarProps {
@@ -26,6 +28,7 @@ const navItems: { id: Module; label: string; icon: React.ElementType }[] = [
   { id: "employees", label: "Employees", icon: Users },
   { id: "sales", label: "Sales Trends", icon: TrendingUp },
   { id: "feedback", label: "Feedback", icon: MessageSquare },
+  { id: "uploads", label: "Top Performers", icon: Trophy },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 

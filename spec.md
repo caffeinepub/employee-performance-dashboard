@@ -1,37 +1,32 @@
 # Employee Performance Dashboard
 
 ## Current State
-The app has 5 modules: Dashboard, Employees, Sales Trends, Feedback, Settings.
-The Employees module currently shows employee cards with inline expanded detail panels (tabs for Performance, SWOT, Sales, Attendance, Feedback). Navigation is all within the Employees component.
+Full-stack app with Dashboard, Employees (table + profile), Sales Trends, Feedback, and Settings modules. Backend has Employee, Performance, SWOT, SalesRecord, Attendance, FeedbackEntry types. No TopPerformer entity or uploads module exists yet.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Employee list as a scrollable TABLE with columns: Name + FIPL Code, Region, Efficiency Score (average of salesInfluenceIndex, operationalDiscipline, productKnowledgeScore, softSkillsScore, and reviewCount as a normalized score), Attendance % (daysOff ratio from attendance records), Total Sales (₹), Category (fseCategory badge)
-- Search bar filtering by name or FIPL Code
-- Filter dropdown for category (fseCategory)
-- Row click → navigate to Employee Profile page
-- Employee Profile page (new component: EmployeeProfile.tsx)
-  - Top section: Avatar (initials-based), Name, FIPL Code, Efficiency Score, Category badge, Region
-  - SWOT Analysis section
-  - Performance Metrics section
-  - Sales accordion (collapsed by default) → table of sales records
-  - Attendance accordion (collapsed by default) → table of attendance records
-  - Sales Trend chart (monthly bar/line chart)
-  - Attendance chart (lapses vs days off bar chart)
-- Back button on profile page to return to employees table
+- `TopPerformer` type in backend: rank, fiplCode, name, accessories, extendedWarranty, totalSales
+- `batchTopPerformersUpload` endpoint: accepts array of TopPerformer records, validates FIPL exists, upserts by rank, returns success/failure counts
+- `getTopPerformers` query: returns all stored TopPerformer records sorted by totalSales descending
+- Frontend "Top Performers" (uploads) module page with:
+  - Table showing top 10 performers with columns: Rank, Name, FIPL Code, Accessories Units, Extended Warranty Units, Total Sales Amount (₹), Region (fetched from employee data)
+  - Gold/silver/bronze row highlights for ranks 1/2/3
+  - File upload area accepting .xlsx and .csv
+  - Preview table after file parsing, red-highlighted invalid rows with error reasons
+  - "Confirm & Save" button for batch upload
+  - Post-upload toast: "X rows uploaded successfully, Y failed"
+  - Empty state when no data
+- Sidebar updated to include "Top Performers" navigation item
 
 ### Modify
-- Employees.tsx: replace card/detail panel layout with the new table layout; keep existing add/edit/delete employee forms
-- App.tsx: support routing between employee list and employee profile (via local state, no router library)
+- Sidebar: add "uploads" as a Module type and nav item (Trophy icon)
+- App.tsx: add case for "uploads" rendering TopPerformers module
 
 ### Remove
-- Inline expanded card detail panels from the employees list view (detail moved to profile page)
+- Nothing
 
 ## Implementation Plan
-1. Create EmployeeProfile.tsx with all sections: top card, SWOT, Performance Metrics, Sales accordion, Attendance accordion, Sales Trend chart, Attendance chart
-2. Rewrite Employees.tsx to show a table with search + category filter, row click navigates to profile
-3. Update App.tsx to handle selectedEmployee state and render EmployeeProfile when one is selected
-4. Efficiency Score = average of (salesInfluenceIndex + operationalDiscipline + productKnowledgeScore + softSkillsScore + reviewCount normalized) from Performance data. If no perf data, show N/A.
-5. Attendance % = (total days - total daysOff) / total days * 100. Computed from attendance records.
-6. Total Sales = sum of amount from SalesRecord for that FIPL.
+1. Add TopPerformer type and batchTopPerformersUpload + getTopPerformers to Motoko backend
+2. Frontend TopPerformers module: xlsx/csv parsing via SheetJS (xlsx package), strict column validation, preview with error rows, batch save, display table with rank highlights and region lookup
+3. Wire into Sidebar and App.tsx routing
