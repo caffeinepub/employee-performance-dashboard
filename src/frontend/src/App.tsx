@@ -9,6 +9,7 @@ import Employees from "./modules/Employees";
 import Feedback from "./modules/Feedback";
 import SalesTrends from "./modules/SalesTrends";
 import { Settings } from "./modules/Settings";
+import SuggestionsIssues from "./modules/SuggestionsIssues";
 import Uploads from "./modules/Uploads";
 
 const queryClient = new QueryClient({
@@ -50,6 +51,8 @@ function AppContent() {
         return <Uploads />;
       case "settings":
         return <Settings />;
+      case "suggestions":
+        return <SuggestionsIssues />;
     }
   };
 

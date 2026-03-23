@@ -9,6 +9,7 @@ const MODULE_TITLES: Record<Module, string> = {
   feedback: "Feedback",
   settings: "Settings",
   uploads: "Top Performers",
+  suggestions: "Suggestions & Issues",
 };
 
 interface HeaderProps {

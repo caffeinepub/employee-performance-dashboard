@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
+  Lightbulb,
   LogOut,
   MessageSquare,
   Settings,
@@ -25,7 +26,8 @@ export type Module =
   | "sales"
   | "feedback"
   | "uploads"
-  | "settings";
+  | "settings"
+  | "suggestions";
 
 interface SidebarProps {
   active: Module;
@@ -37,6 +39,7 @@ const navItems: { id: Module; label: string; icon: React.ElementType }[] = [
   { id: "employees", label: "Employees", icon: Users },
   { id: "sales", label: "Sales Trends", icon: TrendingUp },
   { id: "feedback", label: "Feedback", icon: MessageSquare },
+  { id: "suggestions", label: "Suggestions & Issues", icon: Lightbulb },
   { id: "uploads", label: "Upload", icon: Upload },
   { id: "settings", label: "Settings", icon: Settings },
 ];

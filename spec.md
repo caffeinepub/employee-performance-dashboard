@@ -1,32 +1,29 @@
 # Employee Performance Dashboard
 
 ## Current State
-Full-stack app with Dashboard, Employees (table + profile), Sales Trends, Feedback, and Settings modules. Backend has Employee, Performance, SWOT, SalesRecord, Attendance, FeedbackEntry types. No TopPerformer entity or uploads module exists yet.
+Dashboard shows Issues and Suggestions from a static TypeScript file (`staticIssuesSuggestions.ts`). To add entries, the developer must manually edit that file and redeploy.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `TopPerformer` type in backend: rank, fiplCode, name, accessories, extendedWarranty, totalSales
-- `batchTopPerformersUpload` endpoint: accepts array of TopPerformer records, validates FIPL exists, upserts by rank, returns success/failure counts
-- `getTopPerformers` query: returns all stored TopPerformer records sorted by totalSales descending
-- Frontend "Top Performers" (uploads) module page with:
-  - Table showing top 10 performers with columns: Rank, Name, FIPL Code, Accessories Units, Extended Warranty Units, Total Sales Amount (₹), Region (fetched from employee data)
-  - Gold/silver/bronze row highlights for ranks 1/2/3
-  - File upload area accepting .xlsx and .csv
-  - Preview table after file parsing, red-highlighted invalid rows with error reasons
-  - "Confirm & Save" button for batch upload
-  - Post-upload toast: "X rows uploaded successfully, Y failed"
-  - Empty state when no data
-- Sidebar updated to include "Top Performers" navigation item
+- `SuggestionsIssues` module: full-page view with two panels (Suggestions + Issues)
+- "Add Suggestion" dialog: Title (required), Description fields, Save button (brown/gold)
+- "Add Issue" dialog: Title (required), Category dropdown (FSE General Issues, Brand Issues, Operational Issues, Other), Description fields, Save button (red)
+- localStorage persistence for both Suggestions and Issues (keyed `app_suggestions` / `app_issues`)
+- Toast feedback on save success/failure
+- Empty states per spec
+- Sidebar navigation entry for the new module
 
 ### Modify
-- Sidebar: add "uploads" as a Module type and nav item (Trophy icon)
-- App.tsx: add case for "uploads" rendering TopPerformers module
+- Dashboard Issues/Suggestions panels: read from localStorage (merged with existing static seed data on first load)
+- Header to show "Suggestions & Issues" label for the new module
 
 ### Remove
-- Nothing
+- Nothing removed; static seed data kept as initial localStorage seed
 
 ## Implementation Plan
-1. Add TopPerformer type and batchTopPerformersUpload + getTopPerformers to Motoko backend
-2. Frontend TopPerformers module: xlsx/csv parsing via SheetJS (xlsx package), strict column validation, preview with error rows, batch save, display table with rank highlights and region lookup
-3. Wire into Sidebar and App.tsx routing
+1. Create `src/frontend/src/modules/SuggestionsIssues.tsx` with two panels, dialogs, localStorage CRUD, toasts
+2. Update `App.tsx` to add `suggestions` module case
+3. Update `Sidebar.tsx` to add navigation item
+4. Update `Header.tsx` to handle module label
+5. Update `Dashboard.tsx` to read Issues/Suggestions from localStorage
