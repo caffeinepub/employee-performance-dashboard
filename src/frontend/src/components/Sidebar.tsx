@@ -9,7 +9,6 @@ import {
   ChevronRight,
   LayoutDashboard,
   Lightbulb,
-  LogOut,
   MessageSquare,
   Settings,
   ShieldCheck,
@@ -18,7 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { useState } from "react";
-import { getAvatarColor, getInitials } from "../lib/dateUtils";
+import { useLabels } from "../contexts/UILabelsContext";
 
 export type Module =
   | "dashboard"
@@ -34,23 +33,18 @@ interface SidebarProps {
   onNavigate: (module: Module) => void;
 }
 
-const navItems: { id: Module; label: string; icon: React.ElementType }[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "employees", label: "Employees", icon: Users },
-  { id: "sales", label: "Sales Trends", icon: TrendingUp },
-  { id: "feedback", label: "Feedback", icon: MessageSquare },
-  { id: "suggestions", label: "Suggestions & Issues", icon: Lightbulb },
-  { id: "uploads", label: "Upload", icon: Upload },
-  { id: "settings", label: "Settings", icon: Settings },
-];
-
-const USER_NAME = "Alex Johnson";
-const USER_ROLE = "Admin";
-
 export function Sidebar({ active, onNavigate }: SidebarProps) {
+  const { labels } = useLabels();
   const [collapsed, setCollapsed] = useState(false);
-  const avatarColor = getAvatarColor(USER_NAME);
-  const initials = getInitials(USER_NAME);
+  const navItems: { id: Module; label: string; icon: React.ElementType }[] = [
+    { id: "dashboard", label: labels.navDashboard, icon: LayoutDashboard },
+    { id: "employees", label: labels.navEmployees, icon: Users },
+    { id: "sales", label: labels.navSalesTrends, icon: TrendingUp },
+    { id: "feedback", label: labels.navFeedback, icon: MessageSquare },
+    { id: "suggestions", label: labels.navSuggestionsIssues, icon: Lightbulb },
+    { id: "uploads", label: labels.navUploads, icon: Upload },
+    { id: "settings", label: labels.navSettings, icon: Settings },
+  ];
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -112,7 +106,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
         </nav>
 
         {/* Collapse Toggle */}
-        <div className="px-2 pb-2">
+        <div className="px-2 pb-6">
           <button
             type="button"
             data-ocid="nav.collapse.toggle"
@@ -125,50 +119,6 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
             {!collapsed && <span className="text-xs">Collapse</span>}
           </button>
-        </div>
-
-        {/* User Section */}
-        <div className="px-2 pb-4 border-t border-[#1a3560] pt-4">
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold mx-auto cursor-default"
-                  style={{ backgroundColor: avatarColor }}
-                >
-                  {initials}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {USER_NAME} · {USER_ROLE}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <>
-              <div className="flex items-center gap-3 px-2 mb-3">
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                  style={{ backgroundColor: avatarColor }}
-                >
-                  {initials}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-white text-sm font-semibold truncate">
-                    {USER_NAME}
-                  </p>
-                  <p className="text-sidebar-foreground text-xs">{USER_ROLE}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                data-ocid="nav.logout.button"
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-[#2a4870] text-sidebar-foreground text-sm hover:bg-[#1a3560] hover:text-white transition-colors"
-              >
-                <LogOut size={14} />
-                Logout
-              </button>
-            </>
-          )}
         </div>
       </aside>
     </TooltipProvider>

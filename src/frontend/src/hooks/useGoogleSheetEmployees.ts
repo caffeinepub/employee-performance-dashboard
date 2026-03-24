@@ -1,4 +1,4 @@
-import { useAllEmployeeData } from "./useAllEmployeeData";
+import { useEmployees } from "./useAllEmployeeData";
 
 export interface GoogleSheetEmployee {
   fiplCode: string;
@@ -8,15 +8,15 @@ export interface GoogleSheetEmployee {
   fseCategory: string;
   status: string;
   joinDate: string;
-  avatarUrl: string;
+  avatar: string; // initials e.g. "PS"
   region: string;
   familyDetails: string;
   pastExperience: string;
 }
 
 export function useGoogleSheetEmployees() {
-  const { data, isLoading, isFetching, isError } = useAllEmployeeData();
-  const employees: GoogleSheetEmployee[] = (data ?? []).map((e) => ({
+  const { data, isLoading, isFetching, isError } = useEmployees();
+  const employees: GoogleSheetEmployee[] = data.map((e) => ({
     fiplCode: e.fiplCode,
     name: e.name,
     role: e.role,
@@ -24,7 +24,7 @@ export function useGoogleSheetEmployees() {
     fseCategory: e.category,
     status: e.status,
     joinDate: e.joinDate ?? "",
-    avatarUrl: e.avatarUrl ?? "",
+    avatar: e.avatar ?? "",
     region: e.region ?? "",
     familyDetails: e.familyDetails ?? "",
     pastExperience: e.pastExperience ?? "",

@@ -6,7 +6,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +28,8 @@ import {
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { PasswordGate, usePasswordGate } from "../components/PasswordGate";
+import { useLabels } from "../contexts/UILabelsContext";
 import { useGoogleSheetCallRecords } from "../hooks/useGoogleSheetCallRecords";
 import {
   Variant_tineco_ecovacs_coway_kuvings_instant,
@@ -67,7 +68,7 @@ interface DisplayRecord {
   fiplCode: string;
   fseName: string;
   customerName: string;
-  contact: string;
+  contact?: string;
   brand: string;
   product: string;
   cesScore: number;
@@ -151,6 +152,7 @@ function brandEnumToStr(
 // ─── Main Component ───────────────────────────────────────────────────────────────
 
 export default function Feedback() {
+  const { labels } = useLabels();
   // Google Sheet live data
   const { data: sheetRecords = [], isLoading: sheetLoading } =
     useGoogleSheetCallRecords();
@@ -178,7 +180,6 @@ export default function Feedback() {
         fiplCode: r.fiplCode,
         fseName: r.fseName,
         customerName: r.customerName,
-        contact: r.contact,
         brand: r.brand,
         product: r.product,
         cesScore: r.cesScore,
@@ -223,6 +224,13 @@ export default function Feedback() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Password gate for write actions
+  const { granted: writeGranted, grant: grantWrite } =
+    usePasswordGate("feedback-write");
+  const [pendingAction, setPendingAction] = useState<
+    "upload" | "addRecord" | null
+  >(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -339,7 +347,9 @@ export default function Feedback() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Feedback</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {labels.feedbackTitle}
+          </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             {allRecords.length} records&nbsp;&middot;&nbsp;Avg CES:{" "}
             <span
@@ -370,7 +380,7 @@ export default function Feedback() {
             }`}
           >
             <TableIcon className="w-4 h-4" />
-            Calling Records
+            {labels.callingRecordsTab}
           </button>
           <button
             type="button"
@@ -385,7 +395,7 @@ export default function Feedback() {
             }`}
           >
             <Grid2X2 className="w-4 h-4" />
-            Customer Reviews
+            {labels.customerReviewsTab}
           </button>
         </div>
       </div>
@@ -439,7 +449,13 @@ export default function Feedback() {
             <Button
               variant="outline"
               data-ocid="feedback.upload_button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (writeGranted) {
+                  fileInputRef.current?.click();
+                } else {
+                  setPendingAction("upload");
+                }
+              }}
               disabled={batchUpload.isPending}
             >
               {batchUpload.isPending ? (
@@ -450,14 +466,23 @@ export default function Feedback() {
               Upload Excel
             </Button>
 
-            {/* Add Record Dialog */}
+            {/* Add Record Button */}
+            <Button
+              data-ocid="feedback.open_modal_button"
+              onClick={() => {
+                if (writeGranted) {
+                  setDialogOpen(true);
+                } else {
+                  setPendingAction("addRecord");
+                }
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Record
+            </Button>
+
+            {/* Add Record Dialog (controlled) */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-ocid="feedback.open_modal_button">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Record
-                </Button>
-              </DialogTrigger>
               <DialogContent
                 className="max-w-lg max-h-[90vh] overflow-y-auto"
                 data-ocid="feedback.dialog"
@@ -825,6 +850,20 @@ export default function Feedback() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Password Gate */}
+      {pendingAction && (
+        <PasswordGate
+          gateKey="feedback-write"
+          onUnlock={() => {
+            grantWrite();
+            if (pendingAction === "upload") fileInputRef.current?.click();
+            if (pendingAction === "addRecord") setDialogOpen(true);
+            setPendingAction(null);
+          }}
+          onCancel={() => setPendingAction(null)}
+        />
       )}
     </div>
   );

@@ -2,7 +2,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { Header } from "./components/Header";
+import { PasswordGate } from "./components/PasswordGate";
 import { type Module, Sidebar } from "./components/Sidebar";
+import { UILabelsProvider } from "./contexts/UILabelsContext";
 import Dashboard from "./modules/Dashboard";
 import EmployeeProfile from "./modules/EmployeeProfile";
 import Employees from "./modules/Employees";
@@ -18,13 +20,34 @@ const queryClient = new QueryClient({
   },
 });
 
+// Modules that require password
+const PROTECTED_MODULES: Module[] = ["uploads", "settings"];
+
 function AppContent() {
   const [activeModule, setActiveModule] = useState<Module>("dashboard");
   const [selectedFiplCode, setSelectedFiplCode] = useState<string | null>(null);
+  // pendingModule: the module the user wants to navigate to, pending password
+  const [pendingModule, setPendingModule] = useState<Module | null>(null);
 
   const handleNavigate = (mod: Module) => {
-    setActiveModule(mod);
-    setSelectedFiplCode(null);
+    if (PROTECTED_MODULES.includes(mod)) {
+      setPendingModule(mod);
+    } else {
+      setActiveModule(mod);
+      setSelectedFiplCode(null);
+    }
+  };
+
+  const handlePasswordUnlock = () => {
+    if (pendingModule) {
+      setActiveModule(pendingModule);
+      setSelectedFiplCode(null);
+      setPendingModule(null);
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    setPendingModule(null);
   };
 
   const renderModule = () => {
@@ -74,6 +97,14 @@ function AppContent() {
           </a>
         </footer>
       </div>
+      {/* Password gate for protected navigation */}
+      {pendingModule && (
+        <PasswordGate
+          gateKey={pendingModule}
+          onUnlock={handlePasswordUnlock}
+          onCancel={handlePasswordCancel}
+        />
+      )}
     </div>
   );
 }
@@ -81,8 +112,10 @@ function AppContent() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
-      <Toaster />
+      <UILabelsProvider>
+        <AppContent />
+        <Toaster />
+      </UILabelsProvider>
     </QueryClientProvider>
   );
 }

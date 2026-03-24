@@ -213,4 +213,14 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /** Key-value store: set a value */
+    setKV(key: string, value: string): Promise<void>;
+    /** Key-value store: get a value by key */
+    getKV(key: string): Promise<string | null>;
+    /** Key-value store: get all key-value pairs */
+    getAllKV(): Promise<Array<[string, string]>>;
+    /** Key-value store: delete a key */
+    deleteKV(key: string): Promise<void>;
+    /** Key-value store: clear everything */
+    clearAllKV(): Promise<void>;
 }

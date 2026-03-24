@@ -1,20 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
 import {
   SHEET_NAMES,
+  cell,
   fetchSheetByName,
   normalizeText,
   parseDate,
   parseNumber,
 } from "../lib/googleSheets";
-import { useAllEmployeeData } from "./useAllEmployeeData";
 
 export interface GoogleSheetCallRecord {
   id: string;
   fiplCode: string;
   fseName: string;
   customerName: string;
-  contact: string;
   brand: string;
   product: string;
   cesScore: number;
@@ -23,44 +21,65 @@ export interface GoogleSheetCallRecord {
   agent: string;
 }
 
-// Fetch calling records DIRECTLY from the sheet — no employee-linking so no rows are dropped
-async function fetchCallingRecords(): Promise<GoogleSheetCallRecord[]> {
-  const rows = await fetchSheetByName(SHEET_NAMES.callingRecords);
-  // Columns: FIPL Code[0], FSE Name[1], Customer Name[2], Customer Contact[3],
-  //          Brand[4], Product[5], CES Score[6], Remark[7], Date of Call[8], Agent[9]
+// Fetch ALL call records directly — no employee-linking, no rows dropped
+// Sheet 7: FIPL Code | FSE Name | Customer Name | Brand | Product |
+//          CES Score | Remark | Date of Call | Agent
+async function fetchCallRecords(): Promise<GoogleSheetCallRecord[]> {
+  const { headers, rows } = await fetchSheetByName(SHEET_NAMES.callRecords);
+  console.log("[Call Records Direct] Detected headers:", headers);
+
   return rows
     .map((row, idx) => {
-      const fiplCode = normalizeText(row[0]);
-      if (!fiplCode) return null;
+      const fiplCode =
+        normalizeText(cell(row, headers, "FIPL Code", "fipl")) ?? "";
+      const fseName =
+        normalizeText(cell(row, headers, "FSE Name", "FSE")) ?? "";
+      const customerName =
+        normalizeText(cell(row, headers, "Customer Name", "Customer")) ?? "";
+      const brand = normalizeText(cell(row, headers, "Brand")) ?? "";
+      const product = normalizeText(cell(row, headers, "Product")) ?? "";
+      const cesScore = parseNumber(cell(row, headers, "CES Score", "CES"));
+      const remark =
+        normalizeText(cell(row, headers, "Remark", "Remarks", "Notes")) ?? "";
+      const callDateRaw = cell(
+        row,
+        headers,
+        "Date of Call",
+        "Call Date",
+        "Date",
+      );
+      const callDate =
+        parseDate(callDateRaw) ?? normalizeText(callDateRaw) ?? "";
+      const agent =
+        normalizeText(cell(row, headers, "Agent", "Agent Name")) ?? "";
+
       return {
-        id: `gscr-${idx}`,
+        id: `cr-${idx}`,
         fiplCode,
-        fseName: normalizeText(row[1]) ?? "",
-        customerName: normalizeText(row[2]) ?? "",
-        contact: normalizeText(row[3]) ?? "",
-        brand: normalizeText(row[4]) ?? "",
-        product: normalizeText(row[5]) ?? "",
-        cesScore: parseNumber(row[6] ?? ""),
-        remark: normalizeText(row[7]) ?? "",
-        callDate: parseDate(row[8] ?? "") ?? normalizeText(row[8]) ?? "",
-        agent: normalizeText(row[9]) ?? "",
+        fseName,
+        customerName,
+        brand,
+        product,
+        cesScore,
+        remark,
+        callDate,
+        agent,
       };
     })
-    .filter((r): r is GoogleSheetCallRecord => r !== null);
+    .filter((r) => r.fiplCode !== "" || r.fseName !== "");
 }
 
 export function useGoogleSheetCallRecords() {
-  const { isLoading: empLoading } = useAllEmployeeData();
   const { data, isLoading, isError } = useQuery<GoogleSheetCallRecord[]>({
-    queryKey: ["callingRecordsDirect"],
-    queryFn: fetchCallingRecords,
+    queryKey: ["callRecordsDirect"],
+    queryFn: fetchCallRecords,
     staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
     refetchIntervalInBackground: false,
   });
   return {
     data: data ?? [],
-    isLoading: isLoading || empLoading,
+    isLoading,
     isError,
   };
 }

@@ -13,19 +13,13 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
-  AlertCircle,
   AlertTriangle,
-  Lightbulb,
   PauseCircle,
   RefreshCw,
   Trophy,
   Users,
 } from "lucide-react";
-import {
-  STATIC_ISSUES,
-  STATIC_SUGGESTIONS,
-} from "../data/staticIssuesSuggestions";
-import type { StaticEntry } from "../data/staticIssuesSuggestions";
+import { useLabels } from "../contexts/UILabelsContext";
 import { useGoogleSheetData } from "../hooks/useGoogleSheetData";
 
 function formatLastRefreshed(date: Date | null): string {
@@ -84,53 +78,23 @@ function StatCard({
   );
 }
 
-function PriorityBadge({ priority }: { priority?: StaticEntry["priority"] }) {
-  if (!priority) return null;
-  const styles = {
-    high: "bg-red-100 text-red-700 border-red-300",
-    medium: "bg-amber-100 text-amber-700 border-amber-300",
-    low: "bg-slate-100 text-slate-600 border-slate-300",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold border shrink-0 capitalize ${styles[priority]}`}
-    >
-      {priority}
-    </span>
-  );
+function getRankRowClass(rank: number): string {
+  if (rank === 1) return "bg-amber-50/50 dark:bg-amber-950/20";
+  if (rank === 2) return "bg-slate-50/50 dark:bg-slate-900/20";
+  if (rank === 3) return "bg-orange-50/50 dark:bg-orange-950/20";
+  return "";
 }
 
 function getRankBadge(rank: number) {
   if (rank === 1)
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-300">
-        🥇 1
-      </span>
-    );
+    return <span className="text-amber-500 font-bold text-base">🥇</span>;
   if (rank === 2)
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-300">
-        🥈 2
-      </span>
-    );
+    return <span className="text-slate-400 font-bold text-base">🥈</span>;
   if (rank === 3)
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
-        🥉 3
-      </span>
-    );
+    return <span className="text-orange-500 font-bold text-base">🥉</span>;
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
-      {rank}
-    </span>
+    <span className="text-muted-foreground text-sm font-medium">#{rank}</span>
   );
-}
-
-function getRankRowClass(rank: number) {
-  if (rank === 1) return "bg-amber-50/60";
-  if (rank === 2) return "bg-slate-50/60";
-  if (rank === 3) return "bg-orange-50/60";
-  return "";
 }
 
 export default function Dashboard() {
@@ -141,6 +105,8 @@ export default function Dashboard() {
   const onHoldCount = data?.onHoldCount ?? 0;
   const totalCount = data?.totalCount ?? 0;
   const topPerformers = data?.topPerformers ?? [];
+
+  const { labels } = useLabels();
 
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ["allEmployeeData"] });
@@ -163,9 +129,9 @@ export default function Dashboard() {
             Refresh
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <h1 className="text-2xl font-bold">{labels.dashboardTitle}</h1>
             <p className="text-sm text-muted-foreground">
-              Employee performance at a glance
+              {labels.dashboardSubtitle}
             </p>
           </div>
         </div>
@@ -191,7 +157,7 @@ export default function Dashboard() {
       {/* Stat Cards */}
       <div className="flex gap-4">
         <StatCard
-          title="Active Employees"
+          title={labels.statActiveCount}
           value={isLoading ? "—" : activeCount.toString()}
           icon={Activity}
           loading={isLoading}
@@ -205,7 +171,7 @@ export default function Dashboard() {
           accent="text-amber-600"
         />
         <StatCard
-          title="Total Employees"
+          title={labels.statTotalEmployees}
           value={isLoading ? "—" : totalCount.toString()}
           icon={Users}
           loading={isLoading}
@@ -217,7 +183,7 @@ export default function Dashboard() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Trophy size={16} className="text-amber-500" />
-            Employee Directory — Top 10 Performers
+            {labels.topPerformersSectionHeader}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -293,118 +259,6 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
-
-      {/* Bottom: Issues + Suggestions (static, manually maintained) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Issues */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <AlertCircle size={16} className="text-destructive" />
-              Issues
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Manually maintained — edit{" "}
-              <code className="text-xs bg-muted px-1 rounded">
-                data/staticIssuesSuggestions.ts
-              </code>{" "}
-              to update
-            </p>
-          </CardHeader>
-          <CardContent>
-            {STATIC_ISSUES.length === 0 ? (
-              <div
-                className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm"
-                data-ocid="dashboard.empty_state"
-              >
-                <AlertCircle size={28} className="opacity-20 mb-2" />
-                No issues added yet
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {STATIC_ISSUES.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="p-3 rounded-lg border border-destructive/20 bg-destructive/5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {entry.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {entry.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {entry.date}
-                        </p>
-                      </div>
-                      <PriorityBadge priority={entry.priority} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Suggestions */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Lightbulb size={16} className="text-amber-500" />
-              Suggestions
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Manually maintained — edit{" "}
-              <code className="text-xs bg-muted px-1 rounded">
-                data/staticIssuesSuggestions.ts
-              </code>{" "}
-              to update
-            </p>
-          </CardHeader>
-          <CardContent>
-            {STATIC_SUGGESTIONS.length === 0 ? (
-              <div
-                className="flex flex-col items-center justify-center py-10 text-muted-foreground text-sm"
-                data-ocid="dashboard.empty_state"
-              >
-                <Lightbulb size={28} className="opacity-20 mb-2" />
-                No suggestions added yet
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {STATIC_SUGGESTIONS.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50"
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">
-                          {entry.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {entry.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {entry.date}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className="text-xs shrink-0 border-emerald-300 text-emerald-700"
-                      >
-                        Suggestion
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }

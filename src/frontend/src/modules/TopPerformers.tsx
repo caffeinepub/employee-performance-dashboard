@@ -23,7 +23,9 @@ import {
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { TopPerformer } from "../backend.d";
+import { useLabels } from "../contexts/UILabelsContext";
 import { useActor } from "../hooks/useActor";
+import { useTopPerformers } from "../hooks/useAllEmployeeData";
 import { XLSX } from "../lib/xlsxShim";
 
 const REQUIRED_COLUMNS = [
@@ -86,6 +88,7 @@ function getRankBadge(rank: number) {
 }
 
 export default function TopPerformers() {
+  const { labels } = useLabels();
   const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,16 +97,8 @@ export default function TopPerformers() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
-  const { data: topPerformers = [], isLoading: loadingPerformers } = useQuery<
-    TopPerformer[]
-  >({
-    queryKey: ["topPerformers"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getTopPerformers();
-    },
-    enabled: !!actor && !isFetching,
-  });
+  const { data: topPerformers = [], isLoading: loadingPerformers } =
+    useTopPerformers();
 
   const { data: employees = [], isLoading: loadingEmployees } = useQuery({
     queryKey: ["employees"],
@@ -127,7 +122,7 @@ export default function TopPerformers() {
       const success = Number(result.successCount);
       const fail = Number(result.failCount);
       toast.success(`${success} rows uploaded successfully, ${fail} failed`);
-      queryClient.invalidateQueries({ queryKey: ["topPerformers"] });
+      queryClient.invalidateQueries({ queryKey: ["allEmployeeData"] });
       setParsedRows(null);
       setFileName(null);
     },
@@ -291,7 +286,9 @@ export default function TopPerformers() {
           <Trophy size={20} className="text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-foreground">Top Performers</h1>
+          <h1 className="text-xl font-bold text-foreground">
+            {labels.topPerformersTitle}
+          </h1>
           <p className="text-sm text-muted-foreground">
             Upload and manage top 10 performer rankings
           </p>

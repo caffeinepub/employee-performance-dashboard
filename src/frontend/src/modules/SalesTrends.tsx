@@ -20,17 +20,20 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
-  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import { useLabels } from "../contexts/UILabelsContext";
 import { useGoogleSheetEmployees } from "../hooks/useGoogleSheetEmployees";
 import { useGoogleSheetSales } from "../hooks/useGoogleSheetSales";
 
@@ -77,14 +80,41 @@ function parseDateParts(dateStr: string): {
   month: number;
   day: number;
 } {
-  // Supports DD-MM-YYYY and YYYY-MM-DD
-  const parts = dateStr.split("-").map(Number);
+  if (!dateStr) return { year: Number.NaN, month: Number.NaN, day: Number.NaN };
+  const v = dateStr.trim();
+  // ISO string (contains T separator)
+  if (v.includes("T")) {
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime())) {
+      return {
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        day: d.getDate(),
+      };
+    }
+  }
+  const parts = v.split("-").map(Number);
   if (parts[0] > 31) {
     // YYYY-MM-DD
     return { year: parts[0], month: parts[1], day: parts[2] };
   }
   // DD-MM-YYYY
   return { year: parts[2], month: parts[1], day: parts[0] };
+}
+
+function formatDisplayDate(dateStr: string): string {
+  if (!dateStr) return "\u2014";
+  if (dateStr.includes("T")) {
+    const d = new Date(dateStr);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    }
+  }
+  return dateStr;
 }
 
 // ─── Custom FSE Combobox ───────────────────────────────────────────────────────────
@@ -229,11 +259,17 @@ function FSECombobox({ options, value, onChange }: FSEComboboxProps) {
 function RupeesTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg text-sm">
-      <p className="font-semibold text-foreground mb-1">{label}</p>
+    <div className="bg-popover border border-border rounded-lg px-4 py-3 shadow-xl text-sm">
+      <p className="font-semibold text-foreground mb-2 border-b border-border pb-1.5">
+        {label}
+      </p>
       {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.color }} className="text-xs">
-          {p.name}: \u20b9{p.value?.toLocaleString("en-IN")}
+        <p
+          key={p.name}
+          style={{ color: p.color ?? "#6366f1" }}
+          className="text-xs font-medium"
+        >
+          {p.name}: ₹{Number(p.value).toLocaleString("en-IN")}
         </p>
       ))}
     </div>
@@ -243,6 +279,7 @@ function RupeesTooltip({ active, payload, label }: any) {
 // ─── Main Component ──────────────────────────────────────────────────────────────
 
 export default function SalesTrends() {
+  const { labels } = useLabels();
   const { data: employees = [], isLoading: empLoading } =
     useGoogleSheetEmployees();
   const { data: allSales = [], isLoading: salesLoading } =
@@ -356,6 +393,12 @@ export default function SalesTrends() {
     return entries.map(([period, amount]) => ({ period, amount }));
   }, [filteredSales, viewMode, yearFilter]);
 
+  // Average for reference line
+  const trendAverage = useMemo(() => {
+    if (trendData.length === 0) return 0;
+    return trendData.reduce((s, d) => s + d.amount, 0) / trendData.length;
+  }, [trendData]);
+
   // Chart 2: Region-wise
   const regionData = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -410,9 +453,11 @@ export default function SalesTrends() {
             <TrendingUp className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Sales Trends</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {labels.salesTrendsTitle}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              {filteredSales.length} transactions &middot; \u20b9
+              {filteredSales.length} transactions &middot; ₹
               {totalAmount.toLocaleString("en-IN")} total
             </p>
           </div>
@@ -571,7 +616,7 @@ export default function SalesTrends() {
               <Card className="border-l-4 border-l-indigo-500">
                 <CardContent className="pt-5">
                   <p className="text-2xl font-bold tabular-nums">
-                    \u20b9{totalAmount.toLocaleString("en-IN")}
+                    ₹{totalAmount.toLocaleString("en-IN")}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" /> Total Amount
@@ -605,7 +650,7 @@ export default function SalesTrends() {
                   <p className="text-2xl font-bold tabular-nums">
                     {avgPerTransaction > 0
                       ? `\u20b9${avgPerTransaction.toLocaleString("en-IN")}`
-                      : "—"}
+                      : "\u2014"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <Users className="w-3 h-3" /> Avg per Transaction
@@ -634,7 +679,7 @@ export default function SalesTrends() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Sales Trend */}
+        {/* Tab 1: Sales Trend — executive-grade area chart */}
         <TabsContent value="trend">
           <Card>
             <CardHeader className="pb-2">
@@ -648,41 +693,88 @@ export default function SalesTrends() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <Skeleton className="h-[300px] w-full" />
+                <Skeleton className="h-[380px] w-full" />
               ) : trendData.length === 0 ? (
                 <div
-                  className="h-[300px] flex items-center justify-center text-muted-foreground text-sm"
+                  className="h-[380px] flex items-center justify-center text-muted-foreground text-sm"
                   data-ocid="trend_chart.empty_state"
                 >
                   No data for selected filters
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
+                <ResponsiveContainer width="100%" height={380}>
+                  <ComposedChart
                     data={trendData}
-                    margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
+                    margin={{
+                      top: 20,
+                      right: 48,
+                      bottom: trendData.length > 6 ? 50 : 20,
+                      left: 10,
+                    }}
                   >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      className="stroke-border"
+                    <defs>
+                      <linearGradient
+                        id="salesGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#6366f1"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#6366f1"
+                          stopOpacity={0.02}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                    <XAxis
+                      dataKey="period"
+                      tick={{ fontSize: 12 }}
+                      angle={trendData.length > 6 ? -20 : 0}
+                      textAnchor={trendData.length > 6 ? "end" : "middle"}
+                      height={50}
                     />
-                    <XAxis dataKey="period" tick={{ fontSize: 12 }} />
                     <YAxis
                       tickFormatter={(v: number) => formatRupees(v)}
                       tick={{ fontSize: 11 }}
                       width={72}
                     />
                     <Tooltip content={<RupeesTooltip />} />
-                    <Line
+                    <ReferenceLine
+                      y={trendAverage}
+                      stroke="#f59e0b"
+                      strokeDasharray="4 4"
+                      label={{
+                        value: "Avg",
+                        position: "right",
+                        fontSize: 11,
+                        fill: "#f59e0b",
+                      }}
+                    />
+                    <Area
                       type="monotone"
                       dataKey="amount"
                       name="Amount"
+                      fill="url(#salesGradient)"
                       stroke="#6366f1"
                       strokeWidth={2.5}
-                      dot={{ fill: "#6366f1", r: 4 }}
-                      activeDot={{ r: 6 }}
                     />
-                  </LineChart>
+                    <Line
+                      type="monotone"
+                      dataKey="amount"
+                      name="Trend"
+                      stroke="#6366f1"
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#6366f1", strokeWidth: 0 }}
+                      activeDot={{ r: 5, fill: "#6366f1" }}
+                    />
+                  </ComposedChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
@@ -892,7 +984,7 @@ export default function SalesTrends() {
                         data-ocid={`records_table.item.${idx + 1}`}
                       >
                         <td className="px-4 py-3 whitespace-nowrap font-mono text-xs">
-                          {s.date}
+                          {formatDisplayDate(s.date)}
                         </td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-sm">
@@ -903,7 +995,7 @@ export default function SalesTrends() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          {emp?.region || "—"}
+                          {emp?.region || "\u2014"}
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant="secondary" className="text-xs">
@@ -922,7 +1014,7 @@ export default function SalesTrends() {
                           {s.quantity}
                         </td>
                         <td className="px-4 py-3 font-semibold text-sm tabular-nums">
-                          \u20b9{s.amount.toLocaleString("en-IN")}
+                          ₹{s.amount.toLocaleString("en-IN")}
                         </td>
                       </tr>
                     );

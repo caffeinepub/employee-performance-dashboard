@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,6 +19,7 @@ import {
   BarChart2,
   Calendar,
   Loader2,
+  Palette,
   Settings as SettingsIcon,
   Star,
   Trash2,
@@ -26,6 +28,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLabels } from "../contexts/UILabelsContext";
+import { DEFAULT_UI_LABELS, type UILabels } from "../data/uiLabels";
 import { useActor } from "../hooks/useActor";
 
 interface DataCategory {
@@ -100,6 +104,31 @@ const DATA_CATEGORIES: DataCategory[] = [
 
 export function Settings() {
   const { actor } = useActor();
+  const { labels, saveAll, resetAll, isSyncing } = useLabels();
+  const [draftLabels, setDraftLabels] = useState<UILabels>({ ...labels });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleLabelChange = (key: keyof UILabels, value: string) => {
+    setDraftLabels((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveLabels = async () => {
+    setIsSaving(true);
+    try {
+      await saveAll(draftLabels);
+      toast.success("UI labels saved — visible to all users");
+    } catch {
+      toast.error("Failed to save labels");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetLabels = async () => {
+    await resetAll();
+    setDraftLabels({ ...DEFAULT_UI_LABELS });
+    toast.success("UI labels reset to defaults");
+  };
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -164,10 +193,186 @@ export function Settings() {
           <SettingsIcon size={18} className="text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-foreground">Settings</h1>
+          <h1 className="text-xl font-bold text-foreground">
+            {labels.settingsTitle}
+          </h1>
           <p className="text-sm text-muted-foreground">
             Manage your application data
           </p>
+        </div>
+      </div>
+
+      {/* UI Customization */}
+      <div className="bg-card rounded-lg shadow-card p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Palette size={16} className="text-primary" />
+          <h2 className="font-semibold text-foreground text-base">
+            UI Customization
+          </h2>
+          {isSyncing && (
+            <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1">
+              <Loader2 size={11} className="animate-spin" /> Syncing...
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground mb-5">
+          Edit labels and titles across the dashboard. Changes are saved to the
+          backend and visible to all users with the link.
+        </p>
+
+        {/* Navigation group */}
+        <div className="mb-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+            Navigation
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(
+              [
+                "navDashboard",
+                "navEmployees",
+                "navSalesTrends",
+                "navFeedback",
+                "navTopPerformers",
+                "navSuggestionsIssues",
+                "navUploads",
+                "navSettings",
+              ] as const
+            ).map((key) => (
+              <div key={key} className="space-y-1">
+                <label
+                  htmlFor={`label-${key}`}
+                  className="text-xs text-muted-foreground"
+                >
+                  {key}
+                </label>
+                <Input
+                  id={`label-${key}`}
+                  data-ocid={`settings.${key}.input`}
+                  value={draftLabels[key]}
+                  onChange={(e) => handleLabelChange(key, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Page Titles group */}
+        <div className="mb-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+            Page Titles
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(
+              [
+                "dashboardTitle",
+                "dashboardSubtitle",
+                "employeesTitle",
+                "salesTrendsTitle",
+                "feedbackTitle",
+                "topPerformersTitle",
+                "suggestionsIssuesTitle",
+                "settingsTitle",
+              ] as const
+            ).map((key) => (
+              <div key={key} className="space-y-1">
+                <label
+                  htmlFor={`label-${key}`}
+                  className="text-xs text-muted-foreground"
+                >
+                  {key}
+                </label>
+                <Input
+                  id={`label-${key}`}
+                  data-ocid={`settings.${key}.input`}
+                  value={draftLabels[key]}
+                  onChange={(e) => handleLabelChange(key, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Dashboard Sections group */}
+        <div className="mb-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+            Dashboard Sections
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(
+              [
+                "issuesSectionHeader",
+                "suggestionsSectionHeader",
+                "topPerformersSectionHeader",
+                "statTotalEmployees",
+                "statTotalSales",
+                "statAvgCes",
+                "statActiveCount",
+              ] as const
+            ).map((key) => (
+              <div key={key} className="space-y-1">
+                <label
+                  htmlFor={`label-${key}`}
+                  className="text-xs text-muted-foreground"
+                >
+                  {key}
+                </label>
+                <Input
+                  id={`label-${key}`}
+                  data-ocid={`settings.${key}.input`}
+                  value={draftLabels[key]}
+                  onChange={(e) => handleLabelChange(key, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Feedback Tabs group */}
+        <div className="mb-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+            Feedback Tabs
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(["callingRecordsTab", "customerReviewsTab"] as const).map(
+              (key) => (
+                <div key={key} className="space-y-1">
+                  <label
+                    htmlFor={`label-${key}`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    {key}
+                  </label>
+                  <Input
+                    id={`label-${key}`}
+                    data-ocid={`settings.${key}.input`}
+                    value={draftLabels[key]}
+                    onChange={(e) => handleLabelChange(key, e.target.value)}
+                  />
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 pt-2 border-t border-border">
+          <button
+            type="button"
+            data-ocid="settings.ui_labels.save_button"
+            onClick={handleSaveLabels}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center gap-2"
+          >
+            {isSaving && <Loader2 size={13} className="animate-spin" />}
+            Save Changes
+          </button>
+          <button
+            type="button"
+            data-ocid="settings.ui_labels.reset_button"
+            onClick={handleResetLabels}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Reset to Defaults
+          </button>
         </div>
       </div>
 

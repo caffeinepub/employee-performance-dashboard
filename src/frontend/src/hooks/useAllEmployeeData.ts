@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
   SHEET_NAMES,
+  cell,
   fetchSheetByName,
   normalizeText,
   parseDate,
@@ -16,7 +17,7 @@ export interface EmployeeRecord {
   category: string;
   status: string;
   joinDate: string | null;
-  avatarUrl: string | null;
+  avatar: string | null; // initials e.g. "PS"
   region: string | null;
   familyDetails: string | null;
   pastExperience: string | null;
@@ -26,7 +27,7 @@ export interface EmployeeRecord {
     reviewCount: number;
     operationalDiscipline: number;
     productKnowledgeScore: number;
-    softSkillsScore: number;
+    softSkillScore: number;
     totalDemoVisits: number;
     totalComplaintVisits: number;
     totalVideoCallDemos: number;
@@ -37,14 +38,15 @@ export interface EmployeeRecord {
     weaknesses: string | null;
     opportunities: string | null;
     threats: string | null;
-    cesScore: number;
+    traits: string | null;
+    problems: string | null;
+    feedbacks: string | null;
   } | null;
 
   attendance: Array<{
-    typeOfLab: string | null;
-    daysTakenOff: number;
-    reasonForDayOff: string | null;
     date: string | null;
+    lapsesType: string | null;
+    remarks: string | null;
   }>;
 
   sales: Array<{
@@ -59,7 +61,6 @@ export interface EmployeeRecord {
   feedback: Array<{
     fseName: string | null;
     customerName: string | null;
-    customerContact: string | null;
     brand: string | null;
     product: string | null;
     cesScore: number;
@@ -69,52 +70,120 @@ export interface EmployeeRecord {
   }>;
 }
 
-async function fetchAllData(): Promise<EmployeeRecord[]> {
+export interface TopPerformerRecord {
+  rank: number;
+  name: string;
+  fiplCode: string;
+  accessories: number;
+  extendedWarranty: number;
+  totalSales: number;
+}
+
+interface AllData {
+  employees: EmployeeRecord[];
+  topPerformers: TopPerformerRecord[];
+  allSalesRecords: Array<{
+    fiplCode: string;
+    name: string;
+    region: string;
+    brand: string;
+    product: string;
+    type: string;
+    date: string;
+    quantity: number;
+    amount: number;
+  }>;
+}
+
+// Normalize FIPL codes: strip ALL non-alphanumeric chars to handle BOM, NBSP, hidden unicode
+const normalizeKey = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+async function fetchAllData(): Promise<AllData> {
   const results = await Promise.allSettled([
-    fetchSheetByName(SHEET_NAMES.employeeDetails),
-    fetchSheetByName(SHEET_NAMES.fseParameters),
-    fetchSheetByName(SHEET_NAMES.attendance),
-    fetchSheetByName(SHEET_NAMES.swotAnalysis),
-    fetchSheetByName(SHEET_NAMES.salesData),
-    fetchSheetByName(SHEET_NAMES.callingRecords),
+    fetchSheetByName(SHEET_NAMES.employeeData), // 0
+    fetchSheetByName(SHEET_NAMES.swotAnalysis), // 1
+    fetchSheetByName(SHEET_NAMES.parameters), // 2
+    fetchSheetByName(SHEET_NAMES.attendance), // 3
+    fetchSheetByName(SHEET_NAMES.sales), // 4
+    fetchSheetByName(SHEET_NAMES.topPerformers), // 5
+    fetchSheetByName(SHEET_NAMES.callRecords), // 6
   ]);
 
-  const getRows = (
-    result: PromiseSettledResult<string[][]>,
+  const getSheet = (
+    result: PromiseSettledResult<{ headers: string[]; rows: string[][] }>,
     name: string,
-  ): string[][] => {
+  ) => {
     if (result.status === "rejected") {
       console.error(`Sheet "${name}" failed to load:`, result.reason);
-      return [];
+      return { headers: [] as string[], rows: [] as string[][] };
     }
     return result.value;
   };
 
-  const empRows = getRows(results[0], "Employee Details");
-  const paramRows = getRows(results[1], "FSE Parameters");
-  const attRows = getRows(results[2], "Attendance");
-  const swotRows = getRows(results[3], "SWOT Analysis");
-  const salesRows = getRows(results[4], "Sales Data");
-  const callRows = getRows(results[5], "Calling Records");
+  const empSheet = getSheet(results[0], "Employee Data");
+  const swotSheet = getSheet(results[1], "SWOT Analysis");
+  const paramSheet = getSheet(results[2], "Parameters");
+  const attSheet = getSheet(results[3], "Attendance");
+  const salesSheet = getSheet(results[4], "Sales");
+  const topSheet = getSheet(results[5], "Top Performers");
+  const callSheet = getSheet(results[6], "Call Records");
 
-  // Build employee map
-  // Columns: FIPL Code[0], Name[1], Role[2], Department[3], FSE Category[4], Status[5], Joining Date[6], Avatar URL[7], Region[8], Family Details[9], Past Experience[10]
+  // ── Sheet 1: Employee Data ─────────────────────────────────────────────────
+  // Columns: FIPL Code | Name | Role | Department | FSE Category | Status |
+  //          Joining Date | Avatar | Region | Family Details | Past Experience
+  // Key: normalized (lowercase trimmed) FIPL code for robust cross-sheet matching
   const employeesMap: Record<string, EmployeeRecord> = {};
-  for (const row of empRows) {
-    const fiplCode = normalizeText(row[0]);
-    if (!fiplCode) continue;
-    employeesMap[fiplCode] = {
-      fiplCode,
-      name: normalizeText(row[1]) ?? "",
-      role: normalizeText(row[2]) ?? "",
-      department: normalizeText(row[3]) ?? "",
-      category: normalizeText(row[4]) ?? "",
-      status: normalizeText(row[5]) ?? "",
-      joinDate: parseDate(row[6] ?? ""),
-      avatarUrl: normalizeText(row[7]),
-      region: normalizeText(row[8]),
-      familyDetails: normalizeText(row[9]),
-      pastExperience: normalizeText(row[10]),
+  for (const row of empSheet.rows) {
+    const rawFipl = normalizeText(
+      cell(row, empSheet.headers, "FIPL Code", "fipl code", "fipl") ||
+        row[0] ||
+        "",
+    );
+    if (!rawFipl) continue;
+    const key = normalizeKey(rawFipl);
+    employeesMap[key] = {
+      fiplCode: rawFipl,
+      name:
+        normalizeText(
+          cell(row, empSheet.headers, "Name", "FSE Name", "Employee Name"),
+        ) ?? "",
+      role:
+        normalizeText(cell(row, empSheet.headers, "Role", "Designation")) ?? "",
+      department:
+        normalizeText(cell(row, empSheet.headers, "Department", "Dept")) ?? "",
+      category:
+        normalizeText(
+          cell(row, empSheet.headers, "FSE Category", "Category"),
+        ) ?? "",
+      status:
+        normalizeText(
+          cell(row, empSheet.headers, "Status", "Employment Status"),
+        ) ?? "",
+      joinDate: parseDate(
+        cell(
+          row,
+          empSheet.headers,
+          "Joining Date",
+          "Join Date",
+          "Date of Joining",
+        ),
+      ),
+      avatar: normalizeText(
+        cell(row, empSheet.headers, "Avatar", "Avatar URL", "Initials"),
+      ),
+      region: normalizeText(
+        cell(row, empSheet.headers, "Region", "Zone", "Area"),
+      ),
+      familyDetails: normalizeText(
+        cell(row, empSheet.headers, "Family Details", "Family"),
+      ),
+      pastExperience: normalizeText(
+        cell(row, empSheet.headers, "Past Experience", "Experience"),
+      ),
       performance: null,
       swot: null,
       attendance: [],
@@ -122,111 +191,294 @@ async function fetchAllData(): Promise<EmployeeRecord[]> {
       feedback: [],
     };
   }
+  console.log(
+    `[Employee Data] Loaded ${Object.keys(employeesMap).length} employees`,
+  );
 
-  // Link FSE Parameters
-  // Columns: FIPL Code[0], Name[1], Sales Influence Index[2], Review Count[3],
-  //   Operational Discipline[4], Product Knowledge Score[5], Soft Skills Score[6],
-  //   Total Demo Visits[7], Total Complaint Visits[8], Total Video Call Demos[9]
-  for (const row of paramRows) {
-    const fiplCode = normalizeText(row[0]);
-    if (!fiplCode) continue;
-    if (!employeesMap[fiplCode]) {
-      console.warn(`FSE Parameters: FIPL Code "${fiplCode}" not found`);
-      continue;
+  // ── Sheet 2: SWOT Analysis ─────────────────────────────────────────────────
+  // STRICT POSITIONAL MAPPING (user-confirmed column layout):
+  // A(0)=FIPL Code, B(1)=Strengths, C(2)=Weaknesses, D(3)=Opportunities,
+  // E(4)=Threats, F(5)=Traits, G(6)=Problems, H(7)=SKIP, I(8)=Feedbacks
+  console.log("[SWOT] Detected headers:", swotSheet.headers);
+  const swotMap: Record<
+    string,
+    {
+      strengths: string | null;
+      weaknesses: string | null;
+      opportunities: string | null;
+      threats: string | null;
+      traits: string | null;
+      problems: string | null;
+      feedbacks: string | null;
     }
-    employeesMap[fiplCode].performance = {
-      salesInfluenceIndex: parseNumber(row[2] ?? ""),
-      reviewCount: parseNumber(row[3] ?? ""),
-      operationalDiscipline: parseNumber(row[4] ?? ""),
-      productKnowledgeScore: parseNumber(row[5] ?? ""),
-      softSkillsScore: parseNumber(row[6] ?? ""),
-      totalDemoVisits: parseNumber(row[7] ?? ""),
-      totalComplaintVisits: parseNumber(row[8] ?? ""),
-      totalVideoCallDemos: parseNumber(row[9] ?? ""),
+  > = {};
+
+  for (const row of swotSheet.rows) {
+    // Always read FIPL from column A (index 0) — positional, no header dependency
+    const rawFiplRaw = (row[0] ?? "")
+      .replace(/\u200B|\u200C|\u200D|\uFEFF|\u00A0/g, "")
+      .trim();
+    if (!rawFiplRaw) continue;
+    const key = normalizeKey(rawFiplRaw);
+
+    swotMap[key] = {
+      strengths: normalizeText(row[1] ?? ""),
+      weaknesses: normalizeText(row[2] ?? ""),
+      opportunities: normalizeText(row[3] ?? ""),
+      threats: normalizeText(row[4] ?? ""),
+      traits: normalizeText(row[5] ?? ""),
+      problems: normalizeText(row[6] ?? ""),
+      feedbacks: normalizeText(row[8] ?? ""), // col I = index 8 (col H skipped)
     };
   }
 
-  // Link Attendance
-  // Columns: FIPL Code[0], FSE Name[1], Type of Lab[2], Days Taken Off[3], Reason for Day Off[4], Date[5]
-  for (const row of attRows) {
-    const fiplCode = normalizeText(row[0]);
-    if (!fiplCode) continue;
-    if (!employeesMap[fiplCode]) {
-      console.warn(`Attendance: FIPL Code "${fiplCode}" not found`);
-      continue;
+  console.log(`[SWOT] Loaded ${Object.keys(swotMap).length} SWOT records`);
+  // Debug: log any SWOT keys that don't match any employee key
+  const empKeys = new Set(Object.keys(employeesMap));
+  for (const k of Object.keys(swotMap)) {
+    if (!empKeys.has(k)) {
+      console.warn(`[SWOT] No matching employee for normalized key: "${k}"`);
     }
-    employeesMap[fiplCode].attendance.push({
-      typeOfLab: normalizeText(row[2]),
-      daysTakenOff: parseNumber(row[3] ?? ""),
-      reasonForDayOff: normalizeText(row[4]),
-      date: parseDate(row[5] ?? ""),
-    });
   }
 
-  // Link SWOT Analysis
-  // Columns: FIPL Code[0], Strengths[1], Weaknesses[2], Opportunities[3], Threats[4], CES Score[5]
-  for (const row of swotRows) {
-    const fiplCode = normalizeText(row[0]);
-    if (!fiplCode) continue;
-    if (!employeesMap[fiplCode]) {
-      console.warn(`SWOT: FIPL Code "${fiplCode}" not found`);
+  // Attach SWOT to employees
+  for (const [key, emp] of Object.entries(employeesMap)) {
+    emp.swot = swotMap[key] ?? null;
+    if (!emp.swot) {
+      console.warn(
+        `[SWOT] No SWOT entry found for employee key: "${key}" (FIPL: ${emp.fiplCode})`,
+      );
+    }
+  }
+
+  // ── Sheet 3: Parameters ────────────────────────────────────────────────────
+  for (const row of paramSheet.rows) {
+    const rawFipl = normalizeText(
+      cell(row, paramSheet.headers, "FIPL Code", "fipl"),
+    );
+    if (!rawFipl) continue;
+    const key = normalizeKey(rawFipl);
+    if (!employeesMap[key]) {
+      console.warn(`Parameters: FIPL "${rawFipl}" not found`);
       continue;
     }
-    employeesMap[fiplCode].swot = {
-      strengths: normalizeText(row[1]),
-      weaknesses: normalizeText(row[2]),
-      opportunities: normalizeText(row[3]),
-      threats: normalizeText(row[4]),
-      cesScore: parseNumber(row[5] ?? ""),
+    employeesMap[key].performance = {
+      salesInfluenceIndex: parseNumber(
+        cell(row, paramSheet.headers, "Sales Influence Index", "SII"),
+      ),
+      reviewCount: parseNumber(
+        cell(row, paramSheet.headers, "Review Count", "Reviews"),
+      ),
+      operationalDiscipline: parseNumber(
+        cell(row, paramSheet.headers, "Operational Discipline", "Discipline"),
+      ),
+      productKnowledgeScore: parseNumber(
+        cell(
+          row,
+          paramSheet.headers,
+          "Product Knowledge Score",
+          "Product Knowledge",
+        ),
+      ),
+      softSkillScore: parseNumber(
+        cell(
+          row,
+          paramSheet.headers,
+          "Soft Skill Score",
+          "Soft Skills Score",
+          "Soft Skills",
+        ),
+      ),
+      totalDemoVisits: parseNumber(
+        cell(row, paramSheet.headers, "Total Demo Visits", "Demo Visits"),
+      ),
+      totalComplaintVisits: parseNumber(
+        cell(
+          row,
+          paramSheet.headers,
+          "Total Complaint Visits",
+          "Complaint Visits",
+        ),
+      ),
+      totalVideoCallDemos: parseNumber(
+        cell(
+          row,
+          paramSheet.headers,
+          "Total Video Call Demos",
+          "Video Call Demos",
+          "Video Demos",
+        ),
+      ),
     };
   }
 
-  // Link Sales Data
-  // Columns: FIPL Code[0], Name[1], Brand[2], Product[3], Type[4], Date[5], Quantity[6], Amount[7]
-  for (const row of salesRows) {
-    const fiplCode = normalizeText(row[0]);
-    if (!fiplCode) continue;
-    if (!employeesMap[fiplCode]) {
-      console.warn(`Sales Data: FIPL Code "${fiplCode}" not found`);
+  // ── Sheet 4: Attendance ────────────────────────────────────────────────────
+  for (const row of attSheet.rows) {
+    const rawFipl = normalizeText(
+      cell(row, attSheet.headers, "FIPL Code", "fipl"),
+    );
+    if (!rawFipl) continue;
+    const key = normalizeKey(rawFipl);
+    if (!employeesMap[key]) {
+      console.warn(`Attendance: FIPL "${rawFipl}" not found`);
       continue;
     }
-    employeesMap[fiplCode].sales.push({
-      brand: normalizeText(row[2]),
-      product: normalizeText(row[3]),
-      type: normalizeText(row[4]),
-      date: parseDate(row[5] ?? ""),
-      quantity: parseNumber(row[6] ?? ""),
-      amount: parseNumber(row[7] ?? ""),
+    employeesMap[key].attendance.push({
+      date: parseDate(cell(row, attSheet.headers, "Date", "Attendance Date")),
+      lapsesType: normalizeText(
+        cell(row, attSheet.headers, "Lapses Type", "Lapse Type", "Type"),
+      ),
+      remarks: normalizeText(
+        cell(row, attSheet.headers, "Remarks", "Remark", "Notes", "Reason"),
+      ),
     });
   }
+  console.log(`[Attendance] Loaded ${attSheet.rows.length} records`);
 
-  // Link Calling Records
-  // Columns: FIPL Code[0], FSE Name[1], Customer Name[2], Customer Contact[3], Brand[4], Product[5], CES Score[6], Remark[7], Date of Call[8], Agent[9]
-  for (const row of callRows) {
-    const fiplCode = normalizeText(row[0]);
-    if (!fiplCode) continue;
-    if (!employeesMap[fiplCode]) {
-      console.warn(`Calling Records: FIPL Code "${fiplCode}" not found`);
+  // ── Sheet 5: Sales ─────────────────────────────────────────────────────────
+  console.log("[Sales] Detected headers:", salesSheet.headers);
+  const allSalesRecords: Array<{
+    fiplCode: string;
+    name: string;
+    region: string;
+    brand: string;
+    product: string;
+    type: string;
+    date: string;
+    quantity: number;
+    amount: number;
+  }> = [];
+  for (const row of salesSheet.rows) {
+    const rawFipl = normalizeText(
+      cell(row, salesSheet.headers, "FIPL Code", "fipl"),
+    );
+    const brand = normalizeText(cell(row, salesSheet.headers, "Brand"));
+    const product = normalizeText(cell(row, salesSheet.headers, "Product"));
+    const type = normalizeText(
+      cell(row, salesSheet.headers, "Type", "Sale Type"),
+    );
+    const dateRaw = cell(row, salesSheet.headers, "Date", "Sale Date");
+    const quantityRaw = cell(row, salesSheet.headers, "Quantity", "Qty");
+    const amountRaw = cell(
+      row,
+      salesSheet.headers,
+      "Amount",
+      "Amount (₹)",
+      "Sales Amount",
+    );
+    const quantity = parseNumber(quantityRaw);
+    const amount = parseNumber(amountRaw);
+    const rowName =
+      normalizeText(cell(row, salesSheet.headers, "Name")) || rawFipl || "";
+    const rowRegion =
+      normalizeText(cell(row, salesSheet.headers, "Region")) || "";
+    const parsedDate = parseDate(dateRaw);
+    allSalesRecords.push({
+      fiplCode: rawFipl || "",
+      name: rowName || "",
+      region: rowRegion || "",
+      brand: brand ?? "",
+      product: product ?? "",
+      type: type ?? "",
+      date: parsedDate ?? "",
+      quantity,
+      amount,
+    });
+    if (rawFipl) {
+      const key = normalizeKey(rawFipl);
+      if (employeesMap[key]) {
+        employeesMap[key].sales.push({
+          brand,
+          product,
+          type,
+          date: parsedDate,
+          quantity,
+          amount,
+        });
+      }
+    }
+  }
+  const totalSalesRecords = allSalesRecords.length;
+  console.log(
+    `[Sales] Total records loaded: ${totalSalesRecords}, linked to employees: ${Object.values(employeesMap).reduce((s, e) => s + e.sales.length, 0)}`,
+  );
+
+  // ── Sheet 7: Call Records ──────────────────────────────────────────────────
+  console.log("[Call Records] Detected headers:", callSheet.headers);
+  for (const row of callSheet.rows) {
+    const rawFipl = normalizeText(
+      cell(row, callSheet.headers, "FIPL Code", "fipl"),
+    );
+    if (!rawFipl) continue;
+    const key = normalizeKey(rawFipl);
+    if (!employeesMap[key]) {
+      console.warn(
+        `Call Records: FIPL "${rawFipl}" not found in Employee Data`,
+      );
       continue;
     }
-    employeesMap[fiplCode].feedback.push({
-      fseName: normalizeText(row[1]),
-      customerName: normalizeText(row[2]),
-      customerContact: normalizeText(row[3]),
-      brand: normalizeText(row[4]),
-      product: normalizeText(row[5]),
-      cesScore: parseNumber(row[6] ?? ""),
-      remark: normalizeText(row[7]),
-      dateOfCall: parseDate(row[8] ?? ""),
-      agent: normalizeText(row[9]),
+    employeesMap[key].feedback.push({
+      fseName: normalizeText(cell(row, callSheet.headers, "FSE Name", "FSE")),
+      customerName: normalizeText(
+        cell(row, callSheet.headers, "Customer Name", "Customer"),
+      ),
+      brand: normalizeText(cell(row, callSheet.headers, "Brand")),
+      product: normalizeText(cell(row, callSheet.headers, "Product")),
+      cesScore: parseNumber(cell(row, callSheet.headers, "CES Score", "CES")),
+      remark: normalizeText(
+        cell(row, callSheet.headers, "Remark", "Remarks", "Notes"),
+      ),
+      dateOfCall: parseDate(
+        cell(row, callSheet.headers, "Date of Call", "Call Date", "Date"),
+      ),
+      agent: normalizeText(cell(row, callSheet.headers, "Agent", "Agent Name")),
     });
   }
+  console.log(`[Call Records] Loaded ${callSheet.rows.length} records`);
 
-  return Object.values(employeesMap);
+  // ── Sheet 6: Top Performers ────────────────────────────────────────────────
+  const topPerformers: TopPerformerRecord[] = [];
+  console.log("[Top Performers] Detected headers:", topSheet.headers);
+  for (const row of topSheet.rows) {
+    const rawFipl = normalizeText(
+      cell(row, topSheet.headers, "fiplCode", "FIPL Code", "fipl"),
+    );
+    const name = normalizeText(cell(row, topSheet.headers, "name", "Name"));
+    if (!name && !rawFipl) continue;
+    topPerformers.push({
+      rank:
+        parseNumber(cell(row, topSheet.headers, "rank", "Rank")) ||
+        topPerformers.length + 1,
+      name: name ?? "",
+      fiplCode: rawFipl ?? "",
+      accessories: parseNumber(
+        cell(row, topSheet.headers, "accessories", "Accessories"),
+      ),
+      extendedWarranty: parseNumber(
+        cell(
+          row,
+          topSheet.headers,
+          "extendedWarranty",
+          "Extended Warranty",
+          "warranty",
+        ),
+      ),
+      totalSales: parseNumber(
+        cell(row, topSheet.headers, "totalSales", "Total Sales", "total"),
+      ),
+    });
+  }
+  console.log(`[Top Performers] Loaded ${topPerformers.length} records`);
+
+  const allEmployees = Object.values(employeesMap);
+  console.log(
+    `[Data Load Complete] Employees: ${allEmployees.length}, Sales: ${totalSalesRecords}, Feedback: ${allEmployees.reduce((s, e) => s + e.feedback.length, 0)}`,
+  );
+  return { employees: allEmployees, topPerformers, allSalesRecords } as AllData;
 }
 
 export function useAllEmployeeData() {
-  return useQuery<EmployeeRecord[]>({
+  return useQuery<AllData>({
     queryKey: ["allEmployeeData"],
     queryFn: fetchAllData,
     staleTime: 5 * 60 * 1000,
@@ -235,9 +487,14 @@ export function useAllEmployeeData() {
   });
 }
 
-export function useAllEmployeeDataDerived() {
-  const query = useAllEmployeeData();
-  return query;
+export function useEmployees() {
+  const { data, ...rest } = useAllEmployeeData();
+  return { data: data?.employees ?? [], ...rest };
+}
+
+export function useTopPerformers() {
+  const { data, ...rest } = useAllEmployeeData();
+  return { data: data?.topPerformers ?? [], ...rest };
 }
 
 export { useMemo };

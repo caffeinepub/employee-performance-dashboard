@@ -137,38 +137,13 @@ export interface _SERVICE {
     [TopPerformer, TopPerformer],
     Order
   >,
-  /**
-   * / Delete only attendance records
-   */
   'deleteAllAttendance' : ActorMethod<[], undefined>,
-  /**
-   * / Delete all data (employees, sales, attendance, SWOT, performance, feedback, top performers)
-   */
   'deleteAllData' : ActorMethod<[], undefined>,
-  /**
-   * / DELETE OPERATIONS
-   * / Delete all employees and all related data.
-   */
   'deleteAllEmployees' : ActorMethod<[], undefined>,
-  /**
-   * / Delete only feedback/calling records
-   */
   'deleteAllFeedback' : ActorMethod<[], undefined>,
-  /**
-   * / Delete only performance/parameters records
-   */
   'deleteAllPerformances' : ActorMethod<[], undefined>,
-  /**
-   * / Delete only SWOT records
-   */
   'deleteAllSWOT' : ActorMethod<[], undefined>,
-  /**
-   * / Delete only sales records
-   */
   'deleteAllSales' : ActorMethod<[], undefined>,
-  /**
-   * / Delete only top performer records
-   */
   'deleteAllTopPerformers' : ActorMethod<[], undefined>,
   'deleteEmployee' : ActorMethod<[string], undefined>,
   'getActiveEmployees' : ActorMethod<[], Array<Employee>>,
@@ -189,6 +164,12 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'upsertSWOT' : ActorMethod<[SWOT], { 'ok' : null } | { 'err' : string }>,
+  /** Key-value store */
+  'setKV' : ActorMethod<[string, string], undefined>,
+  'getKV' : ActorMethod<[string], [] | [string]>,
+  'getAllKV' : ActorMethod<[], Array<[string, string]>>,
+  'deleteKV' : ActorMethod<[string], undefined>,
+  'clearAllKV' : ActorMethod<[], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

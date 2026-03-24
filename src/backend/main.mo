@@ -117,6 +117,9 @@ actor {
   let attendanceByFIPL = Map.empty<Text, List.List<Nat>>();
   let feedbackByFIPL = Map.empty<Text, List.List<Nat>>();
 
+  /// Key-value store for UI settings and persistent app data
+  let kvStore = Map.empty<Text, Text>();
+
   var nextSalesId = 1;
   var nextAttendanceId = 1;
   var nextFeedbackId = 1;
@@ -140,6 +143,35 @@ actor {
   func comparePerformanceBySii(a : Performance, b : Performance) : Order.Order {
     Float.compare(b.salesInfluenceIndex, a.salesInfluenceIndex);
   };
+
+  // ─── KEY-VALUE STORE ───────────────────────────────────────────────────────
+
+  /// Set a key-value pair in the store.
+  public shared func setKV(key : Text, value : Text) : async () {
+    kvStore.add(key, value);
+  };
+
+  /// Get a value by key. Returns null if not found.
+  public query func getKV(key : Text) : async ?Text {
+    kvStore.get(key);
+  };
+
+  /// Get all key-value pairs as an array of (key, value) tuples.
+  public query func getAllKV() : async [(Text, Text)] {
+    kvStore.entries().toArray();
+  };
+
+  /// Delete a key from the store.
+  public shared func deleteKV(key : Text) : async () {
+    kvStore.remove(key);
+  };
+
+  /// Clear the entire key-value store.
+  public shared func clearAllKV() : async () {
+    kvStore.clear();
+  };
+
+  // ─── END KEY-VALUE STORE ───────────────────────────────────────────────────
 
   public query ({ caller }) func compareTopPerformersBySales(a : TopPerformer, b : TopPerformer) : async Order.Order {
     Float.compare(b.totalSales, a.totalSales);
@@ -585,10 +617,7 @@ actor {
 
   /// Delete all employees and all related data.
   public func deleteAllEmployees() {
-    // Clear employees
     employees.clear();
-
-    // Clear related maps
     performances.clear();
     swots.clear();
     salesRecords.clear();
@@ -598,8 +627,6 @@ actor {
     attendanceByFIPL.clear();
     feedbackByFIPL.clear();
     topPerformers.clear();
-
-    // Reset next IDs
     nextSalesId := 1;
     nextAttendanceId := 1;
     nextFeedbackId := 1;

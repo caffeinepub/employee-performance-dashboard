@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, Lightbulb, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useLabels } from "../contexts/UILabelsContext";
+import { useActor } from "../hooks/useActor";
 
 const ISSUE_CATEGORIES = [
   "FSE General Issues",
@@ -41,33 +43,30 @@ export interface Issue {
   createdAt: string;
 }
 
-const SUGGESTIONS_KEY = "app_suggestions";
-const ISSUES_KEY = "app_issues";
+const SUGGESTIONS_LS_KEY = "app_suggestions";
+const ISSUES_LS_KEY = "app_issues";
+const SUGGESTIONS_KV_KEY = "suggestions";
+const ISSUES_KV_KEY = "issues";
 
-function loadSuggestions(): Suggestion[] {
+function loadFromStorage<T>(key: string): T[] {
   try {
-    const raw = localStorage.getItem(SUGGESTIONS_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveSuggestions(items: Suggestion[]) {
-  localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(items));
-}
-
-function loadIssues(): Issue[] {
+function saveToStorage<T>(key: string, items: T[]) {
   try {
-    const raw = localStorage.getItem(ISSUES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+    localStorage.setItem(key, JSON.stringify(items));
+  } catch {}
 }
 
-function saveIssues(items: Issue[]) {
-  localStorage.setItem(ISSUES_KEY, JSON.stringify(items));
+function unwrapOptional<T>(val: unknown): T | null {
+  if (val === null || val === undefined) return null;
+  if (Array.isArray(val)) return val.length > 0 ? (val[0] as T) : null;
+  return val as T;
 }
 
 function formatDate(iso: string) {
@@ -78,16 +77,65 @@ function formatDate(iso: string) {
   });
 }
 
+function usePersistentList<T>(lsKey: string, kvKey: string) {
+  const { actor } = useActor();
+  const [items, setItems] = useState<T[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (actor) {
+        try {
+          const raw = await (actor as any).getKV(kvKey);
+          const val = unwrapOptional<string>(raw);
+          if (val) {
+            const parsed: T[] = JSON.parse(val);
+            setItems(parsed);
+            saveToStorage(lsKey, parsed);
+            setLoaded(true);
+            return;
+          }
+        } catch (e) {
+          console.warn(`[${kvKey}] KV load failed, using localStorage`, e);
+        }
+      }
+      setItems(loadFromStorage<T>(lsKey));
+      setLoaded(true);
+    })();
+  }, [actor, kvKey, lsKey]);
+
+  const save = useCallback(
+    async (newItems: T[]) => {
+      saveToStorage(lsKey, newItems);
+      setItems(newItems);
+      if (actor) {
+        try {
+          await (actor as any).setKV(kvKey, JSON.stringify(newItems));
+        } catch (e) {
+          console.warn(
+            `[${kvKey}] KV save failed, saved to localStorage only`,
+            e,
+          );
+        }
+      }
+    },
+    [actor, kvKey, lsKey],
+  );
+
+  return { items, save, loaded };
+}
+
 function SuggestionsPanel() {
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const { labels } = useLabels();
+  const {
+    items: suggestions,
+    save: saveSuggestions,
+    loaded,
+  } = usePersistentList<Suggestion>(SUGGESTIONS_LS_KEY, SUGGESTIONS_KV_KEY);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [titleError, setTitleError] = useState(false);
-
-  useEffect(() => {
-    setSuggestions(loadSuggestions());
-  }, []);
 
   function handleOpen() {
     setTitle("");
@@ -96,7 +144,7 @@ function SuggestionsPanel() {
     setDialogOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!title.trim()) {
       setTitleError(true);
       return;
@@ -108,9 +156,7 @@ function SuggestionsPanel() {
         description: description.trim(),
         createdAt: new Date().toISOString(),
       };
-      const updated = [newItem, ...suggestions];
-      saveSuggestions(updated);
-      setSuggestions(updated);
+      await saveSuggestions([newItem, ...suggestions]);
       setDialogOpen(false);
       toast.success("Saved successfully");
     } catch {
@@ -120,14 +166,15 @@ function SuggestionsPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Panel Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
             <Lightbulb size={18} className="text-amber-600" />
           </div>
           <div>
-            <h2 className="text-base font-semibold">Suggestions</h2>
+            <h2 className="text-base font-semibold">
+              {labels.suggestionsSectionHeader}
+            </h2>
             <p className="text-xs text-muted-foreground">
               Ideas and suggestions from the organization
             </p>
@@ -144,8 +191,11 @@ function SuggestionsPanel() {
         </Button>
       </div>
 
-      {/* List */}
-      {suggestions.length === 0 ? (
+      {!loaded ? (
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-xs text-muted-foreground">Loading...</span>
+        </div>
+      ) : suggestions.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
           <Lightbulb size={36} className="text-amber-300 mb-3" />
           <p className="font-medium text-sm">No suggestions yet</p>
@@ -174,7 +224,6 @@ function SuggestionsPanel() {
         </div>
       )}
 
-      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -238,16 +287,17 @@ function SuggestionsPanel() {
 }
 
 function IssuesPanel() {
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const { labels } = useLabels();
+  const {
+    items: issues,
+    save: saveIssues,
+    loaded,
+  } = usePersistentList<Issue>(ISSUES_LS_KEY, ISSUES_KV_KEY);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [titleError, setTitleError] = useState(false);
-
-  useEffect(() => {
-    setIssues(loadIssues());
-  }, []);
 
   function handleOpen() {
     setTitle("");
@@ -257,7 +307,7 @@ function IssuesPanel() {
     setDialogOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!title.trim()) {
       setTitleError(true);
       return;
@@ -270,9 +320,7 @@ function IssuesPanel() {
         description: description.trim(),
         createdAt: new Date().toISOString(),
       };
-      const updated = [newItem, ...issues];
-      saveIssues(updated);
-      setIssues(updated);
+      await saveIssues([newItem, ...issues]);
       setDialogOpen(false);
       toast.success("Saved successfully");
     } catch {
@@ -282,14 +330,15 @@ function IssuesPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Panel Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
             <AlertCircle size={18} className="text-red-600" />
           </div>
           <div>
-            <h2 className="text-base font-semibold">Issues</h2>
+            <h2 className="text-base font-semibold">
+              {labels.issuesSectionHeader}
+            </h2>
             <p className="text-xs text-muted-foreground">
               Reported FSE and operational issues
             </p>
@@ -307,8 +356,11 @@ function IssuesPanel() {
         </Button>
       </div>
 
-      {/* List */}
-      {issues.length === 0 ? (
+      {!loaded ? (
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-xs text-muted-foreground">Loading...</span>
+        </div>
+      ) : issues.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
           <AlertCircle size={36} className="text-red-300 mb-3" />
           <p className="font-medium text-sm">No issues reported</p>
@@ -344,7 +396,6 @@ function IssuesPanel() {
         </div>
       )}
 
-      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

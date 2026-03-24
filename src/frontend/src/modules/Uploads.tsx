@@ -342,7 +342,7 @@ interface EmployeeRow extends PreviewRowBase {
   fseCategory: string;
   status: string;
   joinDate: string;
-  avatarUrl: string;
+  avatar: string;
   region: string;
   familyDetails: string;
   pastExperience: string;
@@ -386,7 +386,7 @@ function parseEmployeeRows(rawRows: Record<string, unknown>[]): EmployeeRow[] {
         fseCategory: str(r["FSE Category"]),
         status,
         joinDate: str(r["Joining Date (DD-MM-YYYY)"]),
-        avatarUrl: str(r["Avatar URL"]),
+        avatar: str((r.Avatar ?? r["Avatar URL"]) as string),
         region: str(r.Region),
         familyDetails: str(r["Family Details"]),
         pastExperience: str(r["Past Experience"]),
@@ -459,7 +459,7 @@ function EmployeeUploadTab() {
           ? Variant_active_onHold.active
           : Variant_active_onHold.onHold,
       joinDate: r.joinDate,
-      avatarUrl: r.avatarUrl,
+      avatarUrl: r.avatar,
       region: r.region,
       familyDetails: r.familyDetails,
       pastExperience: r.pastExperience,
@@ -551,7 +551,7 @@ interface ParametersRow extends PreviewRowBase {
   reviewCount: number;
   operationalDiscipline: number;
   productKnowledgeScore: number;
-  softSkillsScore: number;
+  softSkillScore: number;
   demoVisits: number;
   complaintVisits: number;
   videoCallDemos: number;
@@ -610,7 +610,7 @@ function parseParametersRows(
           "Product Knowledge Score",
           "Product Knowledge Score",
         ),
-        softSkillsScore: parseNum("Soft Skills Score", "Soft Skills Score"),
+        softSkillScore: parseNum("Soft Skill Score", "Soft Skills Score"),
         demoVisits: parseNum("Total Demo Visits", "Demo Visits"),
         complaintVisits: parseNum("Total Complaint Visits", "Complaint Visits"),
         videoCallDemos: parseNum("Total Video Call Demos", "Video Call Demos"),
@@ -687,7 +687,7 @@ function ParametersUploadTab() {
       reviewCount: BigInt(Math.round(r.reviewCount)),
       operationalDiscipline: r.operationalDiscipline,
       productKnowledgeScore: r.productKnowledgeScore,
-      softSkillsScore: r.softSkillsScore,
+      softSkillsScore: r.softSkillScore,
       demoVisits: BigInt(Math.round(r.demoVisits)),
       complaintVisits: BigInt(Math.round(r.complaintVisits)),
       videoCallDemos: BigInt(Math.round(r.videoCallDemos)),
@@ -757,7 +757,7 @@ function ParametersUploadTab() {
             {row.productKnowledgeScore}
           </TableCell>
           <TableCell className="text-xs text-right">
-            {row.softSkillsScore}
+            {row.softSkillScore}
           </TableCell>
           <TableCell className="text-xs text-right">{row.demoVisits}</TableCell>
           <TableCell className="text-xs text-right">

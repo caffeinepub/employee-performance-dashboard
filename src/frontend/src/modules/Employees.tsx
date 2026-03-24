@@ -45,18 +45,35 @@ import {
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Employee } from "../backend.d";
+import { PasswordGate } from "../components/PasswordGate";
+import {
+  type EmployeeRecord,
+  useAllEmployeeData,
+} from "../hooks/useAllEmployeeData";
 import { useGoogleSheetEmployees } from "../hooks/useGoogleSheetEmployees";
 import {
   Variant_active_onHold,
   useAddEmployee,
-  useAttendanceByFIPL,
   useDeleteEmployee,
-  usePerformanceByFIPL,
-  useSalesByFIPL,
   useUpdateEmployee,
 } from "../hooks/useQueries";
 
 const PAGE_SIZE = 15;
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 const DEPARTMENTS = [
   "Enterprise Sales",
@@ -96,6 +113,43 @@ const EMPTY_EMPLOYEE: Employee = {
   pastExperience: "",
 };
 
+const normalizeKey = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+function parseYearMonth(
+  d: string | null,
+): { year: number; month: number } | null {
+  if (!d) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(d)) {
+    const [y, m] = d.split("-").map(Number);
+    return { year: y, month: m };
+  }
+  const parts = d.split(/[-\/]/).map(Number);
+  if (parts.length === 3) {
+    if (parts[0] > 31) return { year: parts[0], month: parts[1] };
+    return { year: parts[2], month: parts[1] };
+  }
+  return null;
+}
+
+function monthLabel(year: number, month: number) {
+  return `${MONTHS[month - 1]} ${year}`;
+}
+
+function formatIndianCurrency(amount: number) {
+  if (!Number.isFinite(amount) || amount === 0) return "₹0";
+  const s = Math.round(amount).toString();
+  const last3 = s.slice(-3);
+  const rest = s.slice(0, -3);
+  const formatted = rest
+    ? `${rest.replace(/(\d)(?=(\d{2})+$)/g, "$1,")},${last3}`
+    : last3;
+  return `₹${formatted}`;
+}
+
 function categoryBadgeClass(cat: string) {
   if (cat === "Star") return "bg-amber-100 text-amber-800 border-amber-200";
   if (cat === "Cash Cow") return "bg-green-100 text-green-800 border-green-200";
@@ -105,60 +159,72 @@ function categoryBadgeClass(cat: string) {
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
-function formatIndianCurrency(amount: number) {
-  if (amount === 0) return "\u20b90";
-  const s = Math.round(amount).toString();
-  const last3 = s.slice(-3);
-  const rest = s.slice(0, -3);
-  const formatted = rest
-    ? `${rest.replace(/(\d)(?=(\d{2})+$)/g, "$1,")},${last3}`
-    : last3;
-  return `\u20b9${formatted}`;
-}
-
-// Per-employee row that fetches its own data
 function EmployeeRow({
   employee,
+  employeeRecord,
+  lastSalesYM,
+  lastAttendanceYM,
   onSelect,
   onEdit,
   onDelete,
 }: {
   employee: Employee;
+  employeeRecord: EmployeeRecord | undefined;
+  lastSalesYM: { year: number; month: number } | null;
+  lastAttendanceYM: { year: number; month: number } | null;
   onSelect: (fiplCode: string) => void;
   onEdit: (emp: Employee) => void;
   onDelete: (fiplCode: string) => void;
 }) {
-  const { data: perf } = usePerformanceByFIPL(employee.fiplCode);
-  const { data: sales = [] } = useSalesByFIPL(employee.fiplCode);
-  const { data: attendance = [] } = useAttendanceByFIPL(employee.fiplCode);
-
   const efficiencyScore = useMemo(() => {
+    const perf = employeeRecord?.performance;
     if (!perf) return null;
     const avg =
       (perf.salesInfluenceIndex +
         perf.operationalDiscipline +
         perf.productKnowledgeScore +
-        perf.softSkillsScore) /
+        perf.softSkillScore) /
       4;
     return Math.round(avg * 10) / 10;
-  }, [perf]);
+  }, [employeeRecord]);
 
-  const attendancePct = useMemo(() => {
-    if (!attendance.length) return null;
-    const totalDaysOff = attendance.reduce(
-      (sum, a) => sum + Number(a.daysOff),
-      0,
-    );
-    const totalRecords = attendance.length;
-    const totalWorkingDays = totalRecords * 30;
-    const presentDays = totalWorkingDays - totalDaysOff;
-    return Math.round((presentDays / totalWorkingDays) * 100);
-  }, [attendance]);
+  const lastMonthSales = useMemo(() => {
+    if (!lastSalesYM || !employeeRecord) return null;
+    const sales = employeeRecord.sales;
+    if (!sales.length)
+      return { sum: 0, label: monthLabel(lastSalesYM.year, lastSalesYM.month) };
+    const sum = sales
+      .filter((s) => {
+        const ym = parseYearMonth(s.date);
+        return (
+          ym && ym.year === lastSalesYM.year && ym.month === lastSalesYM.month
+        );
+      })
+      .reduce((acc, s) => acc + s.amount, 0);
+    return { sum, label: monthLabel(lastSalesYM.year, lastSalesYM.month) };
+  }, [employeeRecord, lastSalesYM]);
 
-  const totalSales = useMemo(
-    () => sales.reduce((sum, s) => sum + s.amount, 0),
-    [sales],
-  );
+  const lastMonthLapses = useMemo(() => {
+    if (!lastAttendanceYM || !employeeRecord) return null;
+    const att = employeeRecord.attendance;
+    if (!att.length)
+      return {
+        count: 0,
+        label: monthLabel(lastAttendanceYM.year, lastAttendanceYM.month),
+      };
+    const count = att.filter((a) => {
+      const ym = parseYearMonth(a.date);
+      return (
+        ym &&
+        ym.year === lastAttendanceYM.year &&
+        ym.month === lastAttendanceYM.month
+      );
+    }).length;
+    return {
+      count,
+      label: monthLabel(lastAttendanceYM.year, lastAttendanceYM.month),
+    };
+  }, [employeeRecord, lastAttendanceYM]);
 
   return (
     <TableRow
@@ -190,14 +256,33 @@ function EmployeeRow({
         )}
       </TableCell>
       <TableCell>
-        {attendancePct !== null ? (
-          <span className="font-medium">{attendancePct}%</span>
+        {lastMonthLapses !== null ? (
+          <div>
+            <span className="font-medium">
+              {lastMonthLapses.count}{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                lapses
+              </span>
+            </span>
+            <div className="text-xs text-muted-foreground">
+              {lastMonthLapses.label}
+            </div>
+          </div>
         ) : (
           <span className="text-muted-foreground text-sm">N/A</span>
         )}
       </TableCell>
       <TableCell className="font-medium">
-        {formatIndianCurrency(totalSales)}
+        {lastMonthSales !== null ? (
+          <div>
+            <div>{formatIndianCurrency(lastMonthSales.sum)}</div>
+            <div className="text-xs text-muted-foreground">
+              {lastMonthSales.label}
+            </div>
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-sm">N/A</span>
+        )}
       </TableCell>
       <TableCell>
         <Badge
@@ -240,9 +325,12 @@ export default function Employees({
 }) {
   const {
     data: sheetEmployees = [],
-    isLoading,
+    isLoading: sheetLoading,
     isError,
   } = useGoogleSheetEmployees();
+
+  const { data: allData, isLoading: allDataLoading } = useAllEmployeeData();
+
   const addEmployee = useAddEmployee();
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
@@ -261,7 +349,7 @@ export default function Employees({
             ? Variant_active_onHold.onHold
             : Variant_active_onHold.active,
         joinDate: e.joinDate,
-        avatarUrl: e.avatarUrl,
+        avatarUrl: e.avatar,
         region: e.region,
         familyDetails: e.familyDetails,
         pastExperience: e.pastExperience,
@@ -269,11 +357,54 @@ export default function Employees({
     [sheetEmployees],
   );
 
+  // Build a map from normalized FIPL → EmployeeRecord for fast lookup
+  const recordMap = useMemo(() => {
+    const map = new Map<string, EmployeeRecord>();
+    for (const rec of allData?.employees ?? []) {
+      map.set(normalizeKey(rec.fiplCode), rec);
+    }
+    return map;
+  }, [allData]);
+
+  // Global last uploaded month for sales (max year+month across ALL sales records)
+  const lastSalesYM = useMemo(() => {
+    let maxYear = 0;
+    let maxMonth = 0;
+    for (const s of allData?.allSalesRecords ?? []) {
+      const ym = parseYearMonth(s.date);
+      if (!ym) continue;
+      if (ym.year > maxYear || (ym.year === maxYear && ym.month > maxMonth)) {
+        maxYear = ym.year;
+        maxMonth = ym.month;
+      }
+    }
+    return maxYear ? { year: maxYear, month: maxMonth } : null;
+  }, [allData]);
+
+  // Global last uploaded month for attendance (max year+month across ALL attendance records)
+  const lastAttendanceYM = useMemo(() => {
+    let maxYear = 0;
+    let maxMonth = 0;
+    for (const emp of allData?.employees ?? []) {
+      for (const a of emp.attendance) {
+        const ym = parseYearMonth(a.date);
+        if (!ym) continue;
+        if (ym.year > maxYear || (ym.year === maxYear && ym.month > maxMonth)) {
+          maxYear = ym.year;
+          maxMonth = ym.month;
+        }
+      }
+    }
+    return maxYear ? { year: maxYear, month: maxMonth } : null;
+  }, [allData]);
+
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [regionFilter, setRegionFilter] = useState("all");
   const [page, setPage] = useState(1);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [addEmpGate, setAddEmpGate] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState<Employee>(EMPTY_EMPLOYEE);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -281,6 +412,11 @@ export default function Employees({
   const categories = useMemo(() => {
     const cats = new Set(employees.map((e) => e.fseCategory).filter(Boolean));
     return Array.from(cats).sort();
+  }, [employees]);
+
+  const regions = useMemo(() => {
+    const rs = new Set(employees.map((e) => e.region).filter(Boolean));
+    return Array.from(rs).sort();
   }, [employees]);
 
   const filtered = useMemo(() => {
@@ -292,12 +428,15 @@ export default function Employees({
         e.fiplCode.toLowerCase().includes(q);
       const matchCat =
         categoryFilter === "all" || e.fseCategory === categoryFilter;
-      return matchSearch && matchCat;
+      const matchRegion = regionFilter === "all" || e.region === regionFilter;
+      return matchSearch && matchCat && matchRegion;
     });
-  }, [employees, search, categoryFilter]);
+  }, [employees, search, categoryFilter, regionFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const isLoading = sheetLoading || allDataLoading;
 
   const openAdd = () => {
     setEditingEmployee(null);
@@ -357,8 +496,8 @@ export default function Employees({
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex gap-2 flex-1 max-w-lg">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap gap-2 flex-1">
+          <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-8"
@@ -371,7 +510,7 @@ export default function Employees({
               data-ocid="employees.search_input"
             />
           </div>
-          <div className="flex items-center gap-1.5 min-w-[180px]">
+          <div className="flex items-center gap-1.5 min-w-[160px]">
             <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
             <Select
               value={categoryFilter}
@@ -393,10 +532,44 @@ export default function Employees({
               </SelectContent>
             </Select>
           </div>
+          <div className="flex items-center gap-1.5 min-w-[160px]">
+            <Select
+              value={regionFilter}
+              onValueChange={(v) => {
+                setRegionFilter(v);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-9" data-ocid="employees.select">
+                <SelectValue placeholder="All Regions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Regions</SelectItem>
+                {regions.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <Button onClick={openAdd} data-ocid="employees.primary_button">
+        <Button
+          onClick={() => setAddEmpGate(true)}
+          data-ocid="employees.primary_button"
+        >
           <Plus className="w-4 h-4 mr-1" /> Add Employee
         </Button>
+        {addEmpGate && (
+          <PasswordGate
+            gateKey="add-employee"
+            onUnlock={() => {
+              setAddEmpGate(false);
+              openAdd();
+            }}
+            onCancel={() => setAddEmpGate(false)}
+          />
+        )}
       </div>
 
       {/* Table */}
@@ -409,8 +582,25 @@ export default function Employees({
                   <TableHead className="w-[200px]">Name / FIPL</TableHead>
                   <TableHead>Region</TableHead>
                   <TableHead>Efficiency</TableHead>
-                  <TableHead>Attendance</TableHead>
-                  <TableHead>Total Sales</TableHead>
+                  <TableHead>
+                    Attendance Lapses
+                    {lastAttendanceYM && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {monthLabel(
+                          lastAttendanceYM.year,
+                          lastAttendanceYM.month,
+                        )}
+                      </span>
+                    )}
+                  </TableHead>
+                  <TableHead>
+                    Sales
+                    {lastSalesYM && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {monthLabel(lastSalesYM.year, lastSalesYM.month)}
+                      </span>
+                    )}
+                  </TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
@@ -441,6 +631,9 @@ export default function Employees({
                     <EmployeeRow
                       key={emp.fiplCode}
                       employee={emp}
+                      employeeRecord={recordMap.get(normalizeKey(emp.fiplCode))}
+                      lastSalesYM={lastSalesYM}
+                      lastAttendanceYM={lastAttendanceYM}
                       onSelect={onSelectEmployee}
                       onEdit={openEdit}
                       onDelete={(fipl) => setDeleteTarget(fipl)}
