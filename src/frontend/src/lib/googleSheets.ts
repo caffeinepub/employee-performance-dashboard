@@ -9,6 +9,11 @@ export const SHEET_NAMES = {
   sales: "Sales",
   topPerformers: "Top Performers",
   callRecords: "Call Records",
+  pulse: "PULSE",
+  prism: "PRISM",
+  personalityAnalysis: "Personality Analysis",
+  issues: "Issues",
+  suggestions: "Suggestions",
 };
 
 // CSV parser that handles quoted fields with commas inside them

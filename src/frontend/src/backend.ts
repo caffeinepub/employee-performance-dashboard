@@ -295,6 +295,11 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    setKV(key: string, value: string): Promise<void>;
+    getKV(key: string): Promise<string | null>;
+    getAllKV(): Promise<Array<[string, string]>>;
+    deleteKV(key: string): Promise<void>;
+    clearAllKV(): Promise<void>;
 }
 import type { Attendance as _Attendance, Employee as _Employee, FeedbackEntry as _FeedbackEntry, Order as _Order, Performance as _Performance, SWOT as _SWOT, SalesRecord as _SalesRecord } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -824,6 +829,31 @@ export class Backend implements backendInterface {
             const result = await this.actor.upsertSWOT(arg0);
             return from_candid_variant_n4(this._uploadFile, this._downloadFile, result);
         }
+    }
+    async setKV(key: string, value: string): Promise<void> {
+        if (this.processError) {
+            try { return await this.actor.setKV(key, value); } catch (e) { this.processError(e); throw new Error('unreachable'); }
+        } else { return await this.actor.setKV(key, value); }
+    }
+    async getKV(key: string): Promise<string | null> {
+        if (this.processError) {
+            try { const r = await this.actor.getKV(key); return r.length === 0 ? null : r[0]; } catch (e) { this.processError(e); throw new Error('unreachable'); }
+        } else { const r = await this.actor.getKV(key); return r.length === 0 ? null : r[0]; }
+    }
+    async getAllKV(): Promise<Array<[string, string]>> {
+        if (this.processError) {
+            try { return await this.actor.getAllKV() as Array<[string, string]>; } catch (e) { this.processError(e); throw new Error('unreachable'); }
+        } else { return await this.actor.getAllKV() as Array<[string, string]>; }
+    }
+    async deleteKV(key: string): Promise<void> {
+        if (this.processError) {
+            try { return await this.actor.deleteKV(key); } catch (e) { this.processError(e); throw new Error('unreachable'); }
+        } else { return await this.actor.deleteKV(key); }
+    }
+    async clearAllKV(): Promise<void> {
+        if (this.processError) {
+            try { return await this.actor.clearAllKV(); } catch (e) { this.processError(e); throw new Error('unreachable'); }
+        } else { return await this.actor.clearAllKV(); }
     }
 }
 function from_candid_Attendance_n25(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Attendance): Attendance {

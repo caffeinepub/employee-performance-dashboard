@@ -201,6 +201,11 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
+  'setKV' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'getKV' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+  'getAllKV' : IDL.Func([], [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))], ['query']),
+  'deleteKV' : IDL.Func([IDL.Text], [], []),
+  'clearAllKV' : IDL.Func([], [], []),
 });
 
 export const idlInitArgs = [];
@@ -411,6 +416,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
+    'setKV' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'getKV' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+    'getAllKV' : IDL.Func([], [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))], ['query']),
+    'deleteKV' : IDL.Func([IDL.Text], [], []),
+    'clearAllKV' : IDL.Func([], [], []),
   });
 };
 

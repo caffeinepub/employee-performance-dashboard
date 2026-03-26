@@ -12,6 +12,7 @@ export interface GoogleSheetEmployee {
   region: string;
   familyDetails: string;
   pastExperience: string;
+  vehicleDetails: string;
 }
 
 export function useGoogleSheetEmployees() {
@@ -28,6 +29,7 @@ export function useGoogleSheetEmployees() {
     region: e.region ?? "",
     familyDetails: e.familyDetails ?? "",
     pastExperience: e.pastExperience ?? "",
+    vehicleDetails: e.vehicleDetails ?? "",
   }));
   return { data: employees, isLoading, isFetching, isError };
 }

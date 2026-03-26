@@ -21,6 +21,11 @@ export interface EmployeeRecord {
   region: string | null;
   familyDetails: string | null;
   pastExperience: string | null;
+  vehicleDetails: string | null;
+
+  pulseData: Record<string, string> | null; // question -> answer
+  prismData: Record<string, string> | null; // question -> answer
+  personalityData: { traitLabels: string[]; scores: number[] } | null;
 
   performance: {
     salesInfluenceIndex: number;
@@ -111,6 +116,9 @@ async function fetchAllData(): Promise<AllData> {
     fetchSheetByName(SHEET_NAMES.sales), // 4
     fetchSheetByName(SHEET_NAMES.topPerformers), // 5
     fetchSheetByName(SHEET_NAMES.callRecords), // 6
+    fetchSheetByName(SHEET_NAMES.pulse), // 7
+    fetchSheetByName(SHEET_NAMES.prism), // 8
+    fetchSheetByName(SHEET_NAMES.personalityAnalysis), // 9
   ]);
 
   const getSheet = (
@@ -131,6 +139,9 @@ async function fetchAllData(): Promise<AllData> {
   const salesSheet = getSheet(results[4], "Sales");
   const topSheet = getSheet(results[5], "Top Performers");
   const callSheet = getSheet(results[6], "Call Records");
+  const pulseSheet = getSheet(results[7], "PULSE");
+  const prismSheet = getSheet(results[8], "PRISM");
+  const personalitySheet = getSheet(results[9], "Personality Analysis");
 
   // ── Sheet 1: Employee Data ─────────────────────────────────────────────────
   // Columns: FIPL Code | Name | Role | Department | FSE Category | Status |
@@ -184,11 +195,17 @@ async function fetchAllData(): Promise<AllData> {
       pastExperience: normalizeText(
         cell(row, empSheet.headers, "Past Experience", "Experience"),
       ),
+      vehicleDetails: normalizeText(
+        cell(row, empSheet.headers, "Vehicle Details", "Vehicle"),
+      ),
       performance: null,
       swot: null,
       attendance: [],
       sales: [],
       feedback: [],
+      pulseData: null,
+      prismData: null,
+      personalityData: null,
     };
   }
   console.log(
@@ -469,6 +486,81 @@ async function fetchAllData(): Promise<AllData> {
     });
   }
   console.log(`[Top Performers] Loaded ${topPerformers.length} records`);
+
+  // ── PULSE Sheet ───────────────────────────────────────────────────────────
+  // Row 0 = headers (FIPL Code, Employee Name, Q1, Q2, ...)
+  // Each subsequent row = one employee's answers
+  if (pulseSheet.headers.length > 0) {
+    const pulseQuestions = pulseSheet.headers.slice(2); // skip FIPL Code, Employee Name
+    for (const row of pulseSheet.rows) {
+      const rawFipl = (row[0] ?? "")
+        .replace(/\u200B|\u200C|\u200D|\uFEFF|\u00A0/g, "")
+        .trim();
+      if (!rawFipl) continue;
+      const key = normalizeKey(rawFipl);
+      if (!employeesMap[key]) continue;
+      const answers: Record<string, string> = {};
+      pulseQuestions.forEach((q, i) => {
+        const ans = (row[i + 2] ?? "").trim();
+        if (q.trim()) answers[q.trim()] = ans;
+      });
+      employeesMap[key].pulseData = answers;
+    }
+  }
+  console.log(`[PULSE] Loaded ${pulseSheet.rows.length} records`);
+
+  // ── PRISM Sheet ────────────────────────────────────────────────────────────
+  if (prismSheet.headers.length > 0) {
+    const prismQuestions = prismSheet.headers.slice(2); // skip FIPL Code, Employee Name
+    for (const row of prismSheet.rows) {
+      const rawFipl = (row[0] ?? "")
+        .replace(/\u200B|\u200C|\u200D|\uFEFF|\u00A0/g, "")
+        .trim();
+      if (!rawFipl) continue;
+      const key = normalizeKey(rawFipl);
+      if (!employeesMap[key]) continue;
+      const answers: Record<string, string> = {};
+      prismQuestions.forEach((q, i) => {
+        const ans = (row[i + 2] ?? "").trim();
+        if (q.trim()) answers[q.trim()] = ans;
+      });
+      employeesMap[key].prismData = answers;
+    }
+  }
+  console.log(`[PRISM] Loaded ${prismSheet.rows.length} records`);
+
+  // ── Sheet 10: Personality Analysis ───────────────────────────────────────
+  // A(0)=FIPL Code, B(1)=Name, C-G(2-6)=5 trait scores
+  const FALLBACK_LABELS = [
+    "Introverted ↔ Extroverted",
+    "Calm ↔ Emotionally reactive",
+    "Risk-averse ↔ Risk-taker",
+    "Organized ↔ Spontaneous",
+    "Self-doubting ↔ Confident",
+  ];
+  const traitLabelsFromSheet =
+    personalitySheet.headers.length > 2
+      ? personalitySheet.headers
+          .slice(2, 7)
+          .map((h, i) => h.trim() || FALLBACK_LABELS[i])
+      : FALLBACK_LABELS;
+
+  for (const row of personalitySheet.rows) {
+    const rawFipl = normalizeText(row[0] || "");
+    if (!rawFipl) continue;
+    const key = normalizeKey(rawFipl);
+    if (!employeesMap[key]) continue;
+    const scores = traitLabelsFromSheet.map((_, i) =>
+      parseNumber(row[i + 2] || "0"),
+    );
+    employeesMap[key].personalityData = {
+      traitLabels: traitLabelsFromSheet,
+      scores,
+    };
+  }
+  console.log(
+    `[Personality Analysis] Loaded ${personalitySheet.rows.length} records`,
+  );
 
   const allEmployees = Object.values(employeesMap);
   console.log(

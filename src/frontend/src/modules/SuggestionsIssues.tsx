@@ -15,11 +15,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Lightbulb, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Lightbulb, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLabels } from "../contexts/UILabelsContext";
 import { useActor } from "../hooks/useActor";
+import { SHEET_NAMES, fetchSheetByName } from "../lib/googleSheets";
 
 const ISSUE_CATEGORIES = [
   "FSE General Issues",
@@ -43,25 +45,8 @@ export interface Issue {
   createdAt: string;
 }
 
-const SUGGESTIONS_LS_KEY = "app_suggestions";
-const ISSUES_LS_KEY = "app_issues";
 const SUGGESTIONS_KV_KEY = "suggestions";
 const ISSUES_KV_KEY = "issues";
-
-function loadFromStorage<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveToStorage<T>(key: string, items: T[]) {
-  try {
-    localStorage.setItem(key, JSON.stringify(items));
-  } catch {}
-}
 
 function unwrapOptional<T>(val: unknown): T | null {
   if (val === null || val === undefined) return null;
@@ -77,37 +62,30 @@ function formatDate(iso: string) {
   });
 }
 
-function usePersistentList<T>(lsKey: string, kvKey: string) {
+function usePersistentList<T>(kvKey: string) {
   const { actor } = useActor();
   const [items, setItems] = useState<T[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      if (actor) {
-        try {
-          const raw = await (actor as any).getKV(kvKey);
-          const val = unwrapOptional<string>(raw);
-          if (val) {
-            const parsed: T[] = JSON.parse(val);
-            setItems(parsed);
-            localStorage.removeItem(lsKey);
-            setLoaded(true);
-            return;
-          }
-        } catch (e) {
-          console.warn(`[${kvKey}] KV load failed, using localStorage`, e);
-        }
+  const fetchFromBackend = useCallback(async () => {
+    if (!actor) return;
+    try {
+      const raw = await (actor as any).getKV(kvKey);
+      const val = unwrapOptional<string>(raw);
+      if (val) {
+        const parsed: T[] = JSON.parse(val);
+        setItems(parsed);
+      } else {
+        setItems([]);
       }
-      setItems(loadFromStorage<T>(lsKey));
-      setLoaded(true);
-    })();
-  }, [actor, kvKey, lsKey]);
+    } catch (e) {
+      console.warn(`[${kvKey}] KV fetch failed`, e);
+    }
+  }, [actor, kvKey]);
 
-  // Poll backend KV every 30 seconds to sync across users
   useEffect(() => {
-    if (!actor || !loaded) return;
-    const interval = setInterval(async () => {
+    if (!actor) return;
+    (async () => {
       try {
         const raw = await (actor as any).getKV(kvKey);
         const val = unwrapOptional<string>(raw);
@@ -115,32 +93,66 @@ function usePersistentList<T>(lsKey: string, kvKey: string) {
           const parsed: T[] = JSON.parse(val);
           setItems(parsed);
         }
-      } catch (_e) {
-        // silently ignore polling errors
+      } catch (e) {
+        console.warn(`[${kvKey}] KV load failed`, e);
+      } finally {
+        setLoaded(true);
       }
-    }, 30000);
+    })();
+  }, [actor, kvKey]);
+
+  // Poll backend KV every 30 seconds to sync across users
+  useEffect(() => {
+    if (!actor || !loaded) return;
+    const interval = setInterval(fetchFromBackend, 30000);
     return () => clearInterval(interval);
-  }, [actor, kvKey, loaded]);
+  }, [actor, loaded, fetchFromBackend]);
 
   const save = useCallback(
     async (newItems: T[]) => {
       setItems(newItems); // optimistic update
-      if (actor) {
-        try {
-          await (actor as any).setKV(kvKey, JSON.stringify(newItems));
-          localStorage.removeItem(lsKey); // clear stale local data
-        } catch (e) {
-          console.warn(`[${kvKey}] KV save failed, saving to localStorage`, e);
-          saveToStorage(lsKey, newItems);
-        }
-      } else {
-        saveToStorage(lsKey, newItems); // fallback when no actor
-      }
+      if (!actor) throw new Error("No actor available");
+      await (actor as any).setKV(kvKey, JSON.stringify(newItems));
     },
-    [actor, kvKey, lsKey],
+    [actor, kvKey],
   );
 
-  return { items, save, loaded };
+  return { items, save, loaded, refresh: fetchFromBackend };
+}
+
+function useSheetSuggestions() {
+  return useQuery({
+    queryKey: ["sheet-suggestions"],
+    queryFn: async () => {
+      const sheet = await fetchSheetByName(SHEET_NAMES.suggestions);
+      return sheet.rows
+        .map((row, i) => ({
+          id: `sheet_s_${i}`,
+          title: row[0]?.trim() || "",
+          description: row[1]?.trim() || "",
+        }))
+        .filter((r) => r.title);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+function useSheetIssues() {
+  return useQuery({
+    queryKey: ["sheet-issues"],
+    queryFn: async () => {
+      const sheet = await fetchSheetByName(SHEET_NAMES.issues);
+      return sheet.rows
+        .map((row, i) => ({
+          id: `sheet_i_${i}`,
+          title: row[0]?.trim() || "",
+          category: row[1]?.trim() || "",
+          description: row[2]?.trim() || "",
+        }))
+        .filter((r) => r.title);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 }
 
 function SuggestionsPanel() {
@@ -149,17 +161,27 @@ function SuggestionsPanel() {
     items: suggestions,
     save: saveSuggestions,
     loaded,
-  } = usePersistentList<Suggestion>(SUGGESTIONS_LS_KEY, SUGGESTIONS_KV_KEY);
+    refresh,
+  } = usePersistentList<Suggestion>(SUGGESTIONS_KV_KEY);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [titleError, setTitleError] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { data: sheetSuggestions = [] } = useSheetSuggestions();
+  const allSuggestions = [...sheetSuggestions, ...suggestions];
 
   function handleOpen() {
     setTitle("");
     setDescription("");
     setTitleError(false);
     setDialogOpen(true);
+  }
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await refresh();
+    setIsRefreshing(false);
   }
 
   async function handleSave() {
@@ -198,45 +220,70 @@ function SuggestionsPanel() {
             </p>
           </div>
         </div>
-        <Button
-          size="sm"
-          className="gap-1.5 bg-amber-700 hover:bg-amber-800 text-white"
-          onClick={handleOpen}
-          data-ocid="suggestions.add_button"
-        >
-          <Plus size={14} />
-          Add Suggestion
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Refresh data"
+            data-ocid="suggestions.secondary_button"
+          >
+            <RefreshCw
+              size={14}
+              className={isRefreshing ? "animate-spin" : ""}
+            />
+          </Button>
+          <Button
+            size="sm"
+            className="gap-1.5 bg-amber-700 hover:bg-amber-800 text-white"
+            onClick={handleOpen}
+            data-ocid="suggestions.add_button"
+          >
+            <Plus size={14} />
+            Add Suggestion
+          </Button>
+        </div>
       </div>
 
       {!loaded ? (
         <div className="flex-1 flex items-center justify-center">
           <span className="text-xs text-muted-foreground">Loading...</span>
         </div>
-      ) : suggestions.length === 0 ? (
+      ) : allSuggestions.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
           <Lightbulb size={36} className="text-amber-300 mb-3" />
           <p className="font-medium text-sm">No suggestions yet</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Click "Add Suggestion" to submit one
+            Click &quot;Add Suggestion&quot; to submit one
           </p>
         </div>
       ) : (
         <div className="space-y-2 overflow-y-auto flex-1 pr-0.5">
-          {suggestions.map((s) => (
+          {allSuggestions.map((s) => (
             <div
               key={s.id}
               className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 hover:bg-amber-50 transition-colors"
             >
-              <p className="text-sm font-medium">{s.title}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-medium">{s.title}</p>
+                {s.id.startsWith("sheet_") && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 shrink-0">
+                    Live Sheet
+                  </span>
+                )}
+              </div>
               {s.description && (
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                   {s.description}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground mt-1.5">
-                {formatDate(s.createdAt)}
-              </p>
+              {"createdAt" in s && (s as any).createdAt ? (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {formatDate((s as any).createdAt)}
+                </p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -310,12 +357,16 @@ function IssuesPanel() {
     items: issues,
     save: saveIssues,
     loaded,
-  } = usePersistentList<Issue>(ISSUES_LS_KEY, ISSUES_KV_KEY);
+    refresh,
+  } = usePersistentList<Issue>(ISSUES_KV_KEY);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [titleError, setTitleError] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { data: sheetIssues = [] } = useSheetIssues();
+  const allIssues = [...sheetIssues, ...issues];
 
   function handleOpen() {
     setTitle("");
@@ -323,6 +374,12 @@ function IssuesPanel() {
     setDescription("");
     setTitleError(false);
     setDialogOpen(true);
+  }
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await refresh();
+    setIsRefreshing(false);
   }
 
   async function handleSave() {
@@ -362,53 +419,78 @@ function IssuesPanel() {
             </p>
           </div>
         </div>
-        <Button
-          size="sm"
-          variant="destructive"
-          className="gap-1.5"
-          onClick={handleOpen}
-          data-ocid="issues.add_button"
-        >
-          <Plus size={14} />
-          Add Issue
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Refresh data"
+            data-ocid="issues.secondary_button"
+          >
+            <RefreshCw
+              size={14}
+              className={isRefreshing ? "animate-spin" : ""}
+            />
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="gap-1.5"
+            onClick={handleOpen}
+            data-ocid="issues.add_button"
+          >
+            <Plus size={14} />
+            Add Issue
+          </Button>
+        </div>
       </div>
 
       {!loaded ? (
         <div className="flex-1 flex items-center justify-center">
           <span className="text-xs text-muted-foreground">Loading...</span>
         </div>
-      ) : issues.length === 0 ? (
+      ) : allIssues.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
           <AlertCircle size={36} className="text-red-300 mb-3" />
           <p className="font-medium text-sm">No issues reported</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Click "Add Issue" to report one
+            Click &quot;Add Issue&quot; to report one
           </p>
         </div>
       ) : (
         <div className="space-y-2 overflow-y-auto flex-1 pr-0.5">
-          {issues.map((issue) => (
+          {allIssues.map((issue) => (
             <div
               key={issue.id}
               className="p-3 rounded-lg border border-red-200 bg-red-50/40 hover:bg-red-50 transition-colors"
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-medium">{issue.title}</p>
-                {issue.category && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 shrink-0">
-                    {issue.category}
-                  </span>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  {issue.id.startsWith("sheet_") && (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
+                      Live Sheet
+                    </span>
+                  )}
+                  {issue.category && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                      {issue.category}
+                    </span>
+                  )}
+                </div>
               </div>
               {issue.description && (
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                   {issue.description}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground mt-1.5">
-                {formatDate(issue.createdAt)}
-              </p>
+              {"createdAt" in issue && (issue as any).createdAt ? (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {formatDate((issue as any).createdAt)}
+                </p>
+              ) : null}
             </div>
           ))}
         </div>

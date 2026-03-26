@@ -1,3 +1,4 @@
+import { PersonalityPentagon } from "@/components/PersonalityPentagon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -424,6 +425,102 @@ export default function EmployeeProfile({
           </div>
         </CardContent>
       </Card>
+
+      {/* Employee Details: Family, Experience, Vehicle */}
+      {(employee.familyDetails ||
+        employee.pastExperience ||
+        employee.vehicleDetails) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              👤 Employee Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {employee.familyDetails && (
+                <div className="rounded-lg border border-pink-200 bg-pink-50 p-4">
+                  <div className="font-semibold text-pink-800 text-sm mb-2">
+                    👨‍👩‍👧 Family Details
+                  </div>
+                  <ul className="space-y-1">
+                    {employee.familyDetails
+                      .split(/[;\n]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .map((s) => (
+                        <li
+                          key={s}
+                          className="text-xs text-pink-700 flex items-start gap-1"
+                        >
+                          <span className="mt-0.5">•</span>
+                          {s}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+              {employee.pastExperience && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <div className="font-semibold text-amber-800 text-sm mb-2">
+                    💼 Past Experience
+                  </div>
+                  <ul className="space-y-1">
+                    {employee.pastExperience
+                      .split(/[;\n]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .map((s) => (
+                        <li
+                          key={s}
+                          className="text-xs text-amber-700 flex items-start gap-1"
+                        >
+                          <span className="mt-0.5">•</span>
+                          {s}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+              {employee.vehicleDetails && (
+                <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+                  <div className="font-semibold text-teal-800 text-sm mb-2">
+                    🚗 Vehicle Details
+                  </div>
+                  <ul className="space-y-1">
+                    {employee.vehicleDetails
+                      .split(/[;\n]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .map((s) => (
+                        <li
+                          key={s}
+                          className="text-xs text-teal-700 flex items-start gap-1"
+                        >
+                          <span className="mt-0.5">•</span>
+                          {s}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Personality Analysis Pentagon */}
+      {employee.personalityData?.scores.some((s) => s > 0) && (
+        <div className="bg-card rounded-xl border border-border p-5 mb-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <span>🧠</span> Personality Analysis
+          </h3>
+          <PersonalityPentagon
+            traitLabels={employee.personalityData.traitLabels}
+            scores={employee.personalityData.scores}
+          />
+        </div>
+      )}
 
       {/* SWOT Analysis */}
       <Card>
@@ -1033,136 +1130,205 @@ export default function EmployeeProfile({
         )}
       </CollapsibleSection>
 
-      {/* Feedback / Call Records Dropdown */}
+      {/* Feedback / Call Records + PULSE + PRISM Dropdown */}
       <CollapsibleSection
-        title="Feedback"
-        subtitle={`${filteredFeedback.length} of ${feedback.length} records`}
+        title="Feedback & Surveys"
+        subtitle={`${feedback.length} call records`}
       >
-        {feedback.length === 0 ? (
-          <p
-            className="text-muted-foreground text-sm"
-            data-ocid="employees.empty_state"
-          >
-            No feedback records found for this employee.
-          </p>
-        ) : (
-          <>
-            {/* CES Filter */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {(["all", "positive", "negative"] as const).map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setFeedbackFilter(opt)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                    feedbackFilter === opt
-                      ? opt === "positive"
-                        ? "bg-green-100 border-green-400 text-green-800"
-                        : opt === "negative"
-                          ? "bg-red-100 border-red-400 text-red-800"
-                          : "bg-indigo-100 border-indigo-400 text-indigo-800"
-                      : "bg-muted border-border text-muted-foreground hover:bg-muted/60"
-                  }`}
-                  data-ocid="employees.toggle"
-                >
-                  {opt === "all"
-                    ? "All Feedbacks"
-                    : opt === "positive"
-                      ? "Positive (CES >30)"
-                      : "Negative (CES <30)"}
-                </button>
-              ))}
-              <span className="text-xs text-muted-foreground self-center ml-auto">
-                {filteredFeedback.length} records
-              </span>
-            </div>
+        <Tabs defaultValue="callrecords">
+          <TabsList className="mb-4">
+            <TabsTrigger value="callrecords">📞 Call Records</TabsTrigger>
+            <TabsTrigger value="pulse">🔵 PULSE</TabsTrigger>
+            <TabsTrigger value="prism">🔶 PRISM</TabsTrigger>
+          </TabsList>
 
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Brand</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>CES Score</TableHead>
-                    <TableHead>Remark</TableHead>
-                    <TableHead>Agent</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredFeedback.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center text-muted-foreground text-sm py-6"
-                      >
-                        No records match the selected filter.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredFeedback.map((fb, i) => (
-                      <TableRow
-                        key={`fb-${fb.dateOfCall ?? ""}-${fb.customerName ?? ""}-${i}`}
-                        className={
-                          fb.cesScore < 30 ? "bg-red-50 hover:bg-red-100" : ""
-                        }
-                        data-ocid={`employees.item.${i + 1}`}
-                      >
-                        <TableCell className="text-sm">
-                          {fb.dateOfCall
-                            ? (() => {
-                                const d = new Date(fb.dateOfCall);
-                                return Number.isNaN(d.getTime())
-                                  ? fb.dateOfCall
-                                  : d.toLocaleDateString("en-IN", {
-                                      day: "2-digit",
-                                      month: "short",
-                                      year: "numeric",
-                                    });
-                              })()
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {fb.customerName ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {fb.brand ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {fb.product ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <span
-                            className={`font-semibold ${
-                              fb.cesScore < 30
-                                ? "text-red-600"
-                                : fb.cesScore > 30
-                                  ? "text-green-600"
-                                  : "text-muted-foreground"
-                            }`}
-                          >
-                            {fb.cesScore}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          className="text-sm text-muted-foreground max-w-[200px] truncate cursor-pointer hover:text-primary hover:underline"
-                          title="Click to view full remark"
-                          onClick={() => setSelectedFeedback(fb)}
-                        >
-                          {fb.remark ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {fb.agent ?? "—"}
-                        </TableCell>
+          {/* ── Call Records Tab ── */}
+          <TabsContent value="callrecords">
+            {feedback.length === 0 ? (
+              <p
+                className="text-muted-foreground text-sm"
+                data-ocid="employees.empty_state"
+              >
+                No feedback records found for this employee.
+              </p>
+            ) : (
+              <>
+                {/* CES Filter */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {(["all", "positive", "negative"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setFeedbackFilter(opt)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                        feedbackFilter === opt
+                          ? opt === "positive"
+                            ? "bg-green-100 border-green-400 text-green-800"
+                            : opt === "negative"
+                              ? "bg-red-100 border-red-400 text-red-800"
+                              : "bg-indigo-100 border-indigo-400 text-indigo-800"
+                          : "bg-muted border-border text-muted-foreground hover:bg-muted/60"
+                      }`}
+                      data-ocid="employees.toggle"
+                    >
+                      {opt === "all"
+                        ? "All Feedbacks"
+                        : opt === "positive"
+                          ? "Positive (CES >30)"
+                          : "Negative (CES <30)"}
+                    </button>
+                  ))}
+                  <span className="text-xs text-muted-foreground self-center ml-auto">
+                    {filteredFeedback.length} records
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Brand</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead>CES Score</TableHead>
+                        <TableHead>Remark</TableHead>
+                        <TableHead>Agent</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </>
-        )}
+                    </TableHeader>
+                    <TableBody>
+                      {filteredFeedback.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            className="text-center text-muted-foreground text-sm py-6"
+                          >
+                            No records match the selected filter.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredFeedback.map((fb, i) => (
+                          <TableRow
+                            key={`fb-${fb.dateOfCall ?? ""}-${fb.customerName ?? ""}-${i}`}
+                            className={
+                              fb.cesScore < 30
+                                ? "bg-red-50 hover:bg-red-100"
+                                : ""
+                            }
+                            data-ocid={`employees.item.${i + 1}`}
+                          >
+                            <TableCell className="text-sm">
+                              {fb.dateOfCall
+                                ? (() => {
+                                    const d = new Date(fb.dateOfCall);
+                                    return Number.isNaN(d.getTime())
+                                      ? fb.dateOfCall
+                                      : d.toLocaleDateString("en-IN", {
+                                          day: "2-digit",
+                                          month: "short",
+                                          year: "numeric",
+                                        });
+                                  })()
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {fb.customerName ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {fb.brand ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {fb.product ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <span
+                                className={`font-semibold ${
+                                  fb.cesScore < 30
+                                    ? "text-red-600"
+                                    : fb.cesScore > 30
+                                      ? "text-green-600"
+                                      : "text-muted-foreground"
+                                }`}
+                              >
+                                {fb.cesScore}
+                              </span>
+                            </TableCell>
+                            <TableCell
+                              className="text-sm text-muted-foreground max-w-[200px] truncate cursor-pointer hover:text-primary hover:underline"
+                              title="Click to view full remark"
+                              onClick={() => setSelectedFeedback(fb)}
+                            >
+                              {fb.remark ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {fb.agent ?? "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+          </TabsContent>
+
+          {/* ── PULSE Tab ── */}
+          <TabsContent value="pulse">
+            {!employee.pulseData ||
+            Object.keys(employee.pulseData).length === 0 ? (
+              <p className="text-muted-foreground text-sm py-4">
+                No PULSE survey data available for this employee.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {Object.entries(employee.pulseData).map(
+                  ([question, answer]) => (
+                    <div
+                      key={question}
+                      className="rounded-lg border border-blue-200 bg-blue-50 p-3"
+                    >
+                      <div className="font-semibold text-blue-800 text-xs mb-1">
+                        {question}
+                      </div>
+                      <div className="text-sm text-blue-900">
+                        {answer || "—"}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── PRISM Tab ── */}
+          <TabsContent value="prism">
+            {!employee.prismData ||
+            Object.keys(employee.prismData).length === 0 ? (
+              <p className="text-muted-foreground text-sm py-4">
+                No PRISM survey data available for this employee.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {Object.entries(employee.prismData).map(
+                  ([question, answer]) => (
+                    <div
+                      key={question}
+                      className="rounded-lg border border-orange-200 bg-orange-50 p-3"
+                    >
+                      <div className="font-semibold text-orange-800 text-xs mb-1">
+                        {question}
+                      </div>
+                      <div className="text-sm text-orange-900">
+                        {answer || "—"}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </CollapsibleSection>
 
       {/* Feedback detail dialog */}
@@ -1280,10 +1446,26 @@ export default function EmployeeProfile({
                     data-ocid={`employees.item.${i + 1}`}
                   >
                     <TableCell className="text-sm">
-                      {a.date ?? "\u2014"}
+                      {a.date
+                        ? (() => {
+                            try {
+                              const d = new Date(a.date);
+                              if (Number.isNaN(d.getTime())) return a.date;
+                              const dd = String(d.getDate()).padStart(2, "0");
+                              const mm = String(d.getMonth() + 1).padStart(
+                                2,
+                                "0",
+                              );
+                              const yyyy = d.getFullYear();
+                              return `${dd}/${mm}/${yyyy}`;
+                            } catch {
+                              return a.date;
+                            }
+                          })()
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {a.lapsesType ?? "\u2014"}
+                      {a.lapsesType ?? "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {a.remarks ?? "\u2014"}

@@ -10,24 +10,7 @@ import {
 import { DEFAULT_UI_LABELS, type UILabels } from "../data/uiLabels";
 import { useActor } from "../hooks/useActor";
 
-const STORAGE_KEY = "ui_labels_v1";
 const KV_KEY = "ui_labels";
-
-function loadLabelsFromStorage(): UILabels {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_UI_LABELS };
-    return { ...DEFAULT_UI_LABELS, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULT_UI_LABELS };
-  }
-}
-
-function saveLabelsToStorage(labels: UILabels) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(labels));
-  } catch {}
-}
 
 // Candid optional: [] means null, [value] means Some(value)
 function unwrapOptional<T>(val: [] | [T] | T | null | undefined): T | null {
@@ -48,12 +31,11 @@ const UILabelsContext = createContext<UILabelsContextType | null>(null);
 
 export function UILabelsProvider({ children }: { children: React.ReactNode }) {
   const { actor } = useActor();
-  const [labels, setLabelsState] = useState<UILabels>(loadLabelsFromStorage);
+  const [labels, setLabelsState] = useState<UILabels>({ ...DEFAULT_UI_LABELS });
   const [isSyncing, setIsSyncing] = useState(false);
   const loadedFromBackend = useRef(false);
 
   // Load from backend KV store whenever actor becomes available
-  // Retry with polling if actor is not ready yet
   useEffect(() => {
     if (!actor || loadedFromBackend.current) return;
     let cancelled = false;
@@ -66,14 +48,10 @@ export function UILabelsProvider({ children }: { children: React.ReactNode }) {
         if (val) {
           const parsed = { ...DEFAULT_UI_LABELS, ...JSON.parse(val) };
           setLabelsState(parsed);
-          saveLabelsToStorage(parsed);
         }
         loadedFromBackend.current = true;
       } catch (e) {
-        console.warn(
-          "[UILabels] Could not load from backend KV, using localStorage",
-          e,
-        );
+        console.warn("[UILabels] Could not load from backend KV", e);
       } finally {
         if (!cancelled) setIsSyncing(false);
       }
@@ -84,30 +62,15 @@ export function UILabelsProvider({ children }: { children: React.ReactNode }) {
   }, [actor]);
 
   const setLabel = useCallback((key: keyof UILabels, value: string) => {
-    setLabelsState((prev) => {
-      const next = { ...prev, [key]: value };
-      saveLabelsToStorage(next);
-      return next;
-    });
+    setLabelsState((prev) => ({ ...prev, [key]: value }));
   }, []);
 
   const saveAll = useCallback(
     async (newLabels: UILabels) => {
-      saveLabelsToStorage(newLabels);
       setLabelsState(newLabels);
       if (actor) {
-        try {
-          await (actor as any).setKV(KV_KEY, JSON.stringify(newLabels));
-          // Clear localStorage after successful backend save so all devices
-          // always load the authoritative copy from backend
-          localStorage.removeItem(STORAGE_KEY);
-          loadedFromBackend.current = true;
-        } catch (e) {
-          console.warn(
-            "[UILabels] Could not save to backend KV, saved to localStorage only",
-            e,
-          );
-        }
+        await (actor as any).setKV(KV_KEY, JSON.stringify(newLabels));
+        loadedFromBackend.current = true;
       }
     },
     [actor],
@@ -115,7 +78,6 @@ export function UILabelsProvider({ children }: { children: React.ReactNode }) {
 
   const resetAll = useCallback(async () => {
     const defaults = { ...DEFAULT_UI_LABELS };
-    localStorage.removeItem(STORAGE_KEY);
     setLabelsState(defaults);
     loadedFromBackend.current = false;
     if (actor) {

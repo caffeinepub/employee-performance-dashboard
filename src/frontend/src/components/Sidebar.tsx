@@ -65,7 +65,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           </div>
           {!collapsed && (
             <span className="text-white font-bold text-lg tracking-tight">
-              ProPerform
+              Performance Hub
             </span>
           )}
         </div>

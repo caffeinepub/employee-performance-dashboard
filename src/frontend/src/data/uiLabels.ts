@@ -45,8 +45,9 @@ export const DEFAULT_UI_LABELS: UILabels = {
   navUploads: "Uploads",
   navSettings: "Settings",
 
-  dashboardTitle: "Dashboard",
-  dashboardSubtitle: "Employee performance overview",
+  dashboardTitle: "Froole India Pvt Ltd.",
+  dashboardSubtitle:
+    "People Understanding and Lifestyle Evaluation | Personality & Routine Insight Mapping",
   employeesTitle: "Employees",
   salesTrendsTitle: "Sales Trends",
   feedbackTitle: "Feedback",
