@@ -91,7 +91,7 @@ function usePersistentList<T>(lsKey: string, kvKey: string) {
           if (val) {
             const parsed: T[] = JSON.parse(val);
             setItems(parsed);
-            saveToStorage(lsKey, parsed);
+            localStorage.removeItem(lsKey);
             setLoaded(true);
             return;
           }
@@ -104,19 +104,37 @@ function usePersistentList<T>(lsKey: string, kvKey: string) {
     })();
   }, [actor, kvKey, lsKey]);
 
+  // Poll backend KV every 30 seconds to sync across users
+  useEffect(() => {
+    if (!actor || !loaded) return;
+    const interval = setInterval(async () => {
+      try {
+        const raw = await (actor as any).getKV(kvKey);
+        const val = unwrapOptional<string>(raw);
+        if (val) {
+          const parsed: T[] = JSON.parse(val);
+          setItems(parsed);
+        }
+      } catch (_e) {
+        // silently ignore polling errors
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [actor, kvKey, loaded]);
+
   const save = useCallback(
     async (newItems: T[]) => {
-      saveToStorage(lsKey, newItems);
-      setItems(newItems);
+      setItems(newItems); // optimistic update
       if (actor) {
         try {
           await (actor as any).setKV(kvKey, JSON.stringify(newItems));
+          localStorage.removeItem(lsKey); // clear stale local data
         } catch (e) {
-          console.warn(
-            `[${kvKey}] KV save failed, saved to localStorage only`,
-            e,
-          );
+          console.warn(`[${kvKey}] KV save failed, saving to localStorage`, e);
+          saveToStorage(lsKey, newItems);
         }
+      } else {
+        saveToStorage(lsKey, newItems); // fallback when no actor
       }
     },
     [actor, kvKey, lsKey],

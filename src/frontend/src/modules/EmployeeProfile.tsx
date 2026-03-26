@@ -318,36 +318,6 @@ export default function EmployeeProfile({
     return feedback;
   }, [feedback, feedbackFilter]);
 
-  const attendanceChartData = useMemo(() => {
-    const map: Record<
-      string,
-      {
-        month: string;
-        attendance: number;
-        eod: number;
-        brief: number;
-        total: number;
-      }
-    > = {};
-    for (const rec of attendance) {
-      if (!rec.date) continue;
-      const parts = rec.date.split("-");
-      let key = rec.date;
-      if (parts.length === 3) {
-        const monthIdx = Number.parseInt(parts[1], 10) - 1;
-        key = `${MONTH_NAMES[monthIdx] ?? parts[1]} ${parts[2]}`;
-      }
-      if (!map[key])
-        map[key] = { month: key, attendance: 0, eod: 0, brief: 0, total: 0 };
-      const type = (rec.lapsesType ?? "").toLowerCase();
-      if (type.includes("attendance")) map[key].attendance += 1;
-      else if (type.includes("eod")) map[key].eod += 1;
-      else if (type.includes("brief")) map[key].brief += 1;
-      map[key].total += 1;
-    }
-    return Object.values(map).slice(-12);
-  }, [attendance]);
-
   if (!employee) {
     return (
       <div
@@ -546,7 +516,7 @@ export default function EmployeeProfile({
               {swot.traits && (
                 <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 sm:col-span-2">
                   <div className="font-semibold text-purple-800 text-sm mb-2">
-                    \u2B50 Traits
+                    ⭐ Traits
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {swot.traits
@@ -567,7 +537,7 @@ export default function EmployeeProfile({
               {swot.problems && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
                   <div className="font-semibold text-rose-800 text-sm mb-2">
-                    \u26A1 Problems
+                    ⚡ Problems
                   </div>
                   <ul className="space-y-1">
                     {swot.problems
@@ -922,96 +892,6 @@ export default function EmployeeProfile({
           </Tabs>
         </CardContent>
       </Card>
-
-      {/* Attendance Chart */}
-      <div className="grid grid-cols-1 gap-5">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">
-                  Attendance Lapses Overview
-                </CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Monthly lapse count by type
-                </p>
-              </div>
-              {attendanceChartData.length > 0 && (
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-destructive">
-                    {attendanceChartData.reduce((s, d) => s + d.total, 0)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total Lapses</p>
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {attendanceChartData.length === 0 ? (
-              <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">
-                No attendance lapses recorded
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={attendanceChartData}
-                  margin={{ top: 8, right: 16, bottom: 24, left: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="var(--border)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 11 }}
-                    angle={-30}
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    allowDecimals={false}
-                    label={{
-                      value: "Lapses",
-                      angle: -90,
-                      position: "insideLeft",
-                      offset: 10,
-                      style: { fontSize: 11 },
-                    }}
-                  />
-                  <Tooltip
-                    formatter={(value: number, name: string) => [value, name]}
-                    contentStyle={{ fontSize: 12 }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                  <Bar
-                    dataKey="attendance"
-                    name="Attendance Lapses"
-                    fill="#ef4444"
-                    radius={[3, 3, 0, 0]}
-                    stackId="a"
-                  />
-                  <Bar
-                    dataKey="eod"
-                    name="EOD Picture Lapses"
-                    fill="#f97316"
-                    radius={[3, 3, 0, 0]}
-                    stackId="a"
-                  />
-                  <Bar
-                    dataKey="brief"
-                    name="Days Brief Lapses"
-                    fill="#eab308"
-                    radius={[3, 3, 0, 0]}
-                    stackId="a"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Sales Dropdown */}
       <CollapsibleSection

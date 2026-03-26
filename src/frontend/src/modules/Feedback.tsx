@@ -220,6 +220,10 @@ export default function Feedback() {
   const [view, setView] = useState<ViewMode>("table");
   const [search, setSearch] = useState("");
   const [brandFilter, setBrandFilter] = useState("all");
+  const [cesFilter, setCesFilter] = useState<"all" | "positive" | "negative">(
+    "all",
+  );
+  const [remarkRecord, setRemarkRecord] = useState<DisplayRecord | null>(null);
   const [page, setPage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -232,6 +236,7 @@ export default function Feedback() {
     "upload" | "addRecord" | null
   >(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cesFilter is used inside
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return allRecords.filter((f) => {
@@ -244,9 +249,13 @@ export default function Feedback() {
       const matchBrand =
         brandFilter === "all" ||
         f.brand.toLowerCase() === brandFilter.toLowerCase();
-      return matchSearch && matchBrand;
+      const matchCes =
+        cesFilter === "all" ||
+        (cesFilter === "positive" && f.cesScore > 30) ||
+        (cesFilter === "negative" && f.cesScore <= 30);
+      return matchSearch && matchBrand && matchCes;
     });
-  }, [allRecords, search, brandFilter]);
+  }, [allRecords, search, brandFilter, cesFilter]);
 
   const pages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -435,6 +444,22 @@ export default function Feedback() {
                     {b}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={cesFilter}
+              onValueChange={(v) => {
+                setCesFilter(v as "all" | "positive" | "negative");
+                setPage(0);
+              }}
+            >
+              <SelectTrigger className="w-44" data-ocid="feedback.select">
+                <SelectValue placeholder="All Feedbacks" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Feedbacks</SelectItem>
+                <SelectItem value="positive">Positive (CES &gt;30)</SelectItem>
+                <SelectItem value="negative">Negative (CES ≤30)</SelectItem>
               </SelectContent>
             </Select>
 
@@ -632,6 +657,70 @@ export default function Feedback() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+            {/* Remark Preview Dialog */}
+            <Dialog
+              open={remarkRecord !== null}
+              onOpenChange={(open) => {
+                if (!open) setRemarkRecord(null);
+              }}
+            >
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Feedback Details</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <span className="font-semibold">Customer: </span>
+                    {remarkRecord?.customerName}
+                  </div>
+                  <div>
+                    <span className="font-semibold">FIPL Code: </span>
+                    {remarkRecord?.fiplCode}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Brand: </span>
+                    {remarkRecord?.brand}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Product: </span>
+                    {remarkRecord?.product}
+                  </div>
+                  <div>
+                    <span className="font-semibold">CES Score: </span>
+                    <span
+                      className={
+                        remarkRecord && remarkRecord.cesScore <= 30
+                          ? "text-red-600 font-semibold"
+                          : "text-green-600 font-semibold"
+                      }
+                    >
+                      {remarkRecord?.cesScore} (
+                      {remarkRecord && remarkRecord.cesScore > 30
+                        ? "Positive"
+                        : "Negative"}
+                      )
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-semibold">Date: </span>
+                    {remarkRecord?.callDate}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Agent: </span>
+                    {remarkRecord?.agent}
+                  </div>
+                  <div className="border-t pt-3">
+                    <span className="font-semibold block mb-1">
+                      Full Remark:
+                    </span>
+                    <p className="text-muted-foreground leading-relaxed">
+                      {remarkRecord?.remark || "No remark"}
+                    </p>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* Summary bar */}
@@ -749,9 +838,14 @@ export default function Feedback() {
                         <CesBadge score={f.cesScore} />
                       </td>
                       <td className="px-4 py-3 max-w-[200px] text-sm text-muted-foreground">
-                        <span className="line-clamp-2" title={f.remark}>
+                        <button
+                          type="button"
+                          className="line-clamp-2 text-left cursor-pointer hover:text-blue-600 hover:underline bg-transparent border-none p-0"
+                          title="Click to view full details"
+                          onClick={() => setRemarkRecord(f)}
+                        >
                           {f.remark || "—"}
-                        </span>
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-sm">{f.agent}</td>
                     </tr>
