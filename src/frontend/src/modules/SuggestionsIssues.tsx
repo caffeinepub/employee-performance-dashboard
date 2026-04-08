@@ -151,6 +151,8 @@ function usePersistentList<T>(kvKey: string) {
       }
     } catch (e) {
       console.warn(`[${kvKey}] KV fetch failed`, e);
+    } finally {
+      setLoaded(true);
     }
   }, [actor, kvKey]);
 
@@ -667,7 +669,10 @@ export default function SuggestionsIssues() {
   const toggleExpand = (id: string) =>
     setExpandedId((prev) => (prev === id ? null : id));
 
-  const loaded = activeTab === "issues" ? issuesLoaded : suggestionsLoaded;
+  const loaded =
+    activeTab === "issues"
+      ? issuesLoaded || allIssues.length > 0
+      : suggestionsLoaded || allSuggestions.length > 0;
   const isEmpty =
     activeTab === "issues"
       ? allIssues.length === 0
