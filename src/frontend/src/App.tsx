@@ -50,10 +50,16 @@ function AppContent() {
     setPendingModule(null);
   };
 
+  // Navigate to employee profile from any module (e.g. Dashboard Top Performers)
+  const handleSelectEmployee = (fiplCode: string) => {
+    setSelectedFiplCode(fiplCode);
+    setActiveModule("employees");
+  };
+
   const renderModule = () => {
     switch (activeModule) {
       case "dashboard":
-        return <Dashboard />;
+        return <Dashboard onSelectEmployee={handleSelectEmployee} />;
       case "employees":
         if (selectedFiplCode) {
           return (

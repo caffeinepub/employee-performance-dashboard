@@ -328,13 +328,6 @@ export default function SalesTrends() {
   const [txYearFilter, setTxYearFilter] = useState("all");
   const [txPage, setTxPage] = useState(0);
 
-  // Default to most recent year
-  useEffect(() => {
-    if (yearFilter === "all" && availableYears.length > 0) {
-      setYearFilter(String(availableYears[0]));
-    }
-  }, [availableYears, yearFilter]);
-
   // Filtered sales (for chart/stats)
   const filteredSales = useMemo(() => {
     return allSales.filter((s) => {

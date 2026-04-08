@@ -131,7 +131,11 @@ function getRankBadge(rank: number) {
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({
+  onSelectEmployee,
+}: {
+  onSelectEmployee?: (fiplCode: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { data, isLoading, isFetching, isError } = useGoogleSheetData();
   const { data: allSalesRecords = [], isLoading: salesLoading } = useAllSales();
@@ -146,25 +150,9 @@ export default function Dashboard() {
     const currentYear = new Date().getFullYear();
     let currentYearTotal = 0;
 
-    // Find max year and max month in that year from sales data
+    // Find max year+month from all sales records
     let maxYear = -1;
     let maxMonth = -1;
-
-    for (const s of allSalesRecords) {
-      const { year, month } = parseSaleYearMonth(s.date);
-      if (Number.isNaN(year) || Number.isNaN(month)) continue;
-      if (year > maxYear || (year === maxYear && month > maxMonth)) {
-        if (year > maxYear) {
-          maxYear = year;
-          maxMonth = month;
-        } else {
-          maxMonth = month;
-        }
-      }
-    }
-    // Recompute maxMonth properly
-    maxYear = -1;
-    maxMonth = -1;
     for (const s of allSalesRecords) {
       const { year, month } = parseSaleYearMonth(s.date);
       if (Number.isNaN(year) || Number.isNaN(month)) continue;
@@ -334,7 +322,18 @@ export default function Dashboard() {
                       >
                         <TableCell>{getRankBadge(rank)}</TableCell>
                         <TableCell className="font-medium text-sm">
-                          {p.name}
+                          {onSelectEmployee && p.fiplCode ? (
+                            <button
+                              type="button"
+                              className="text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer font-medium text-left"
+                              onClick={() => onSelectEmployee(p.fiplCode)}
+                              data-ocid={`dashboard.performer_name.${i + 1}`}
+                            >
+                              {p.name}
+                            </button>
+                          ) : (
+                            p.name
+                          )}
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           {p.fiplCode}

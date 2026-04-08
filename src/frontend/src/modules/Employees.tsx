@@ -401,6 +401,9 @@ export default function Employees({
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [regionFilter, setRegionFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "onHold" | "inactive"
+  >("all");
   const [page, setPage] = useState(1);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -429,9 +432,26 @@ export default function Employees({
       const matchCat =
         categoryFilter === "all" || e.fseCategory === categoryFilter;
       const matchRegion = regionFilter === "all" || e.region === regionFilter;
-      return matchSearch && matchCat && matchRegion;
+      // Status filter: match against the sheet status string (case-insensitive)
+      const sheetEmp = sheetEmployees.find(
+        (se) => normalizeKey(se.fiplCode) === normalizeKey(e.fiplCode),
+      );
+      const rawStatus = (sheetEmp?.status || "").toLowerCase().trim();
+      let matchStatus = true;
+      if (statusFilter === "active") matchStatus = rawStatus === "active";
+      else if (statusFilter === "onHold") matchStatus = rawStatus === "on hold";
+      else if (statusFilter === "inactive")
+        matchStatus = rawStatus === "inactive";
+      return matchSearch && matchCat && matchRegion && matchStatus;
     });
-  }, [employees, search, categoryFilter, regionFilter]);
+  }, [
+    employees,
+    sheetEmployees,
+    search,
+    categoryFilter,
+    regionFilter,
+    statusFilter,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -498,87 +518,135 @@ export default function Employees({
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex flex-wrap gap-2 flex-1">
-          <div className="relative min-w-[200px] flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              placeholder="Search by name or FIPL code..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <div className="flex flex-wrap gap-2 flex-1">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Search by name or FIPL code..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                data-ocid="employees.search_input"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 min-w-[160px]">
+              <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Select
+                value={categoryFilter}
+                onValueChange={(v) => {
+                  setCategoryFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9" data-ocid="employees.select">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-[160px]">
+              <Select
+                value={regionFilter}
+                onValueChange={(v) => {
+                  setRegionFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9" data-ocid="employees.select">
+                  <SelectValue placeholder="All Regions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Regions</SelectItem>
+                  {regions.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button
+            onClick={() => setAddEmpGate(true)}
+            data-ocid="employees.primary_button"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Add Employee
+          </Button>
+          {addEmpGate && (
+            <PasswordGate
+              gateKey="add-employee"
+              onUnlock={() => {
+                setAddEmpGate(false);
+                openAdd();
               }}
-              data-ocid="employees.search_input"
+              onCancel={() => setAddEmpGate(false)}
             />
-          </div>
-          <div className="flex items-center gap-1.5 min-w-[160px]">
-            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-            <Select
-              value={categoryFilter}
-              onValueChange={(v) => {
-                setCategoryFilter(v);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="h-9" data-ocid="employees.select">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-1.5 min-w-[160px]">
-            <Select
-              value={regionFilter}
-              onValueChange={(v) => {
-                setRegionFilter(v);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="h-9" data-ocid="employees.select">
-                <SelectValue placeholder="All Regions" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Regions</SelectItem>
-                {regions.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          )}
         </div>
-        <Button
-          onClick={() => setAddEmpGate(true)}
-          data-ocid="employees.primary_button"
+
+        {/* Status switchable filter */}
+        <div
+          className="flex items-center gap-2"
+          data-ocid="employees.status_filter"
         >
-          <Plus className="w-4 h-4 mr-1" /> Add Employee
-        </Button>
-        {addEmpGate && (
-          <PasswordGate
-            gateKey="add-employee"
-            onUnlock={() => {
-              setAddEmpGate(false);
-              openAdd();
-            }}
-            onCancel={() => setAddEmpGate(false)}
-          />
-        )}
+          <span className="text-xs text-muted-foreground font-medium">
+            Status:
+          </span>
+          <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            {(
+              [
+                { value: "all", label: "All" },
+                { value: "active", label: "Active" },
+                { value: "onHold", label: "On Hold" },
+                { value: "inactive", label: "Inactive" },
+              ] as const
+            ).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(value);
+                  setPage(1);
+                }}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  statusFilter === value
+                    ? value === "active"
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : value === "onHold"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : value === "inactive"
+                          ? "bg-red-500 text-white shadow-sm"
+                          : "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                data-ocid={`employees.status.${value}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-muted-foreground ml-1">
+            {filtered.length} employee{filtered.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {/* Table */}
       <div className="border border-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
+          <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
             <Table>
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow className="hover:bg-transparent">
