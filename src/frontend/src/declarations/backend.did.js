@@ -149,6 +149,7 @@ export const idlService = IDL.Service({
       [BatchResult],
       [],
     ),
+  'clearAllKV' : IDL.Func([], [], []),
   'compareTopPerformersBySales' : IDL.Func(
       [TopPerformer, TopPerformer],
       [Order],
@@ -163,8 +164,14 @@ export const idlService = IDL.Service({
   'deleteAllSales' : IDL.Func([], [], ['oneway']),
   'deleteAllTopPerformers' : IDL.Func([], [], ['oneway']),
   'deleteEmployee' : IDL.Func([IDL.Text], [], []),
+  'deleteKV' : IDL.Func([IDL.Text], [], []),
   'getActiveEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
   'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
+  'getAllKV' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
+      ['query'],
+    ),
   'getAllPerformancesSortedBySII' : IDL.Func(
       [],
       [IDL.Vec(Performance)],
@@ -182,6 +189,7 @@ export const idlService = IDL.Service({
       [IDL.Vec(FeedbackEntry)],
       ['query'],
     ),
+  'getKV' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
   'getPerformanceByFIPL' : IDL.Func(
       [IDL.Text],
       [IDL.Opt(Performance)],
@@ -190,6 +198,7 @@ export const idlService = IDL.Service({
   'getSWOTByFIPL' : IDL.Func([IDL.Text], [IDL.Opt(SWOT)], ['query']),
   'getSalesByFIPL' : IDL.Func([IDL.Text], [IDL.Vec(SalesRecord)], ['query']),
   'getTopPerformers' : IDL.Func([], [IDL.Vec(TopPerformer)], ['query']),
+  'setKV' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'updateEmployee' : IDL.Func([Employee], [], []),
   'upsertPerformance' : IDL.Func(
       [Performance],
@@ -201,11 +210,6 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
-  'setKV' : IDL.Func([IDL.Text, IDL.Text], [], []),
-  'getKV' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
-  'getAllKV' : IDL.Func([], [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))], ['query']),
-  'deleteKV' : IDL.Func([IDL.Text], [], []),
-  'clearAllKV' : IDL.Func([], [], []),
 });
 
 export const idlInitArgs = [];
@@ -364,6 +368,7 @@ export const idlFactory = ({ IDL }) => {
         [BatchResult],
         [],
       ),
+    'clearAllKV' : IDL.Func([], [], []),
     'compareTopPerformersBySales' : IDL.Func(
         [TopPerformer, TopPerformer],
         [Order],
@@ -378,8 +383,14 @@ export const idlFactory = ({ IDL }) => {
     'deleteAllSales' : IDL.Func([], [], ['oneway']),
     'deleteAllTopPerformers' : IDL.Func([], [], ['oneway']),
     'deleteEmployee' : IDL.Func([IDL.Text], [], []),
+    'deleteKV' : IDL.Func([IDL.Text], [], []),
     'getActiveEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
     'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
+    'getAllKV' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
+        ['query'],
+      ),
     'getAllPerformancesSortedBySII' : IDL.Func(
         [],
         [IDL.Vec(Performance)],
@@ -397,6 +408,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(FeedbackEntry)],
         ['query'],
       ),
+    'getKV' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
     'getPerformanceByFIPL' : IDL.Func(
         [IDL.Text],
         [IDL.Opt(Performance)],
@@ -405,6 +417,7 @@ export const idlFactory = ({ IDL }) => {
     'getSWOTByFIPL' : IDL.Func([IDL.Text], [IDL.Opt(SWOT)], ['query']),
     'getSalesByFIPL' : IDL.Func([IDL.Text], [IDL.Vec(SalesRecord)], ['query']),
     'getTopPerformers' : IDL.Func([], [IDL.Vec(TopPerformer)], ['query']),
+    'setKV' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'updateEmployee' : IDL.Func([Employee], [], []),
     'upsertPerformance' : IDL.Func(
         [Performance],
@@ -416,11 +429,6 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'setKV' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'getKV' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
-    'getAllKV' : IDL.Func([], [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))], ['query']),
-    'deleteKV' : IDL.Func([IDL.Text], [], []),
-    'clearAllKV' : IDL.Func([], [], []),
   });
 };
 

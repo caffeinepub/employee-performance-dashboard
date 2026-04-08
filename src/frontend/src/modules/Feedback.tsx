@@ -195,7 +195,7 @@ export default function Feedback() {
   const backendDisplayRecords: DisplayRecord[] = useMemo(
     () =>
       backendFeedback.map((f) => ({
-        id: `be-${f.entryId.toString()}`,
+        id: `be-${(f.entryId ?? 0n).toString()}`,
         fiplCode: f.fiplCode,
         fseName: nameMap[f.fiplCode] || "",
         customerName: f.customerName,

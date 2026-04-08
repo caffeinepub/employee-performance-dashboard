@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { useActor } from "../hooks/useActor";
+import { XLSX } from "../lib/xlsxShim";
 import type {
   Attendance,
   Employee,
@@ -38,15 +40,13 @@ import type {
   SWOT,
   SalesRecord,
   TopPerformer,
-} from "../backend.d";
+} from "../types/appTypes";
 import {
   Variant_accessories_extendedWarranty,
   Variant_active_onHold,
   Variant_eod_daysBrief_attendance,
   Variant_tineco_ecovacs_coway_kuvings_instant,
-} from "../backend.d";
-import { useActor } from "../hooks/useActor";
-import { XLSX } from "../lib/xlsxShim";
+} from "../types/appTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers

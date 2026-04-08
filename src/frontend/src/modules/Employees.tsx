@@ -44,7 +44,6 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Employee } from "../backend.d";
 import { PasswordGate } from "../components/PasswordGate";
 import {
   type EmployeeRecord,
@@ -57,6 +56,7 @@ import {
   useDeleteEmployee,
   useUpdateEmployee,
 } from "../hooks/useQueries";
+import type { Employee } from "../types/appTypes";
 
 const PAGE_SIZE = 15;
 
@@ -460,7 +460,10 @@ export default function Employees({
       toast.success("Employee updated");
       setDialogOpen(false);
     } else {
-      const res = await addEmployee.mutateAsync(form);
+      const res = (await addEmployee.mutateAsync(form)) as {
+        ok?: string;
+        err?: string;
+      };
       if ("ok" in res) {
         toast.success("Employee added");
         setDialogOpen(false);

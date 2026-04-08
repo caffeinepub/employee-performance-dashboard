@@ -22,11 +22,11 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import type { TopPerformer } from "../backend.d";
 import { useLabels } from "../contexts/UILabelsContext";
 import { useActor } from "../hooks/useActor";
 import { useTopPerformers } from "../hooks/useAllEmployeeData";
 import { XLSX } from "../lib/xlsxShim";
+import type { TopPerformer } from "../types/appTypes";
 
 const REQUIRED_COLUMNS = [
   "Rank",

@@ -6,13 +6,13 @@ import type {
   Performance,
   SWOT,
   SalesRecord,
-} from "../backend.d";
+} from "../types/appTypes";
 import {
   Variant_accessories_extendedWarranty,
   Variant_active_onHold,
   Variant_eod_daysBrief_attendance,
   Variant_tineco_ecovacs_coway_kuvings_instant,
-} from "../backend.d";
+} from "../types/appTypes";
 import { useActor } from "./useActor";
 
 export type {

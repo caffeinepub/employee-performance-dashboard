@@ -152,6 +152,10 @@ export interface backendInterface {
     batchSWOTUpload(records: Array<SWOT>): Promise<BatchResult>;
     batchSalesUpload(records: Array<SalesRecord>): Promise<BatchResult>;
     batchTopPerformersUpload(records: Array<TopPerformer>): Promise<BatchResult>;
+    /**
+     * / Clear the entire key-value store.
+     */
+    clearAllKV(): Promise<void>;
     compareTopPerformersBySales(a: TopPerformer, b: TopPerformer): Promise<Order>;
     /**
      * / Delete only attendance records
@@ -187,17 +191,33 @@ export interface backendInterface {
      */
     deleteAllTopPerformers(): Promise<void>;
     deleteEmployee(fiplCode: string): Promise<void>;
+    /**
+     * / Delete a key from the store.
+     */
+    deleteKV(key: string): Promise<void>;
     getActiveEmployees(): Promise<Array<Employee>>;
     getAllEmployees(): Promise<Array<Employee>>;
+    /**
+     * / Get all key-value pairs as an array of (key, value) tuples.
+     */
+    getAllKV(): Promise<Array<[string, string]>>;
     getAllPerformancesSortedBySII(): Promise<Array<Performance>>;
     getAttendanceByFIPL(fiplCode: string): Promise<Array<Attendance>>;
     getDashboardStats(): Promise<DashboardStats>;
     getEmployee(fiplCode: string): Promise<Employee | null>;
     getFeedbackByFIPL(fiplCode: string): Promise<Array<FeedbackEntry>>;
+    /**
+     * / Get a value by key. Returns null if not found.
+     */
+    getKV(key: string): Promise<string | null>;
     getPerformanceByFIPL(fiplCode: string): Promise<Performance | null>;
     getSWOTByFIPL(fiplCode: string): Promise<SWOT | null>;
     getSalesByFIPL(fiplCode: string): Promise<Array<SalesRecord>>;
     getTopPerformers(): Promise<Array<TopPerformer>>;
+    /**
+     * / Set a key-value pair in the store.
+     */
+    setKV(key: string, value: string): Promise<void>;
     updateEmployee(employee: Employee): Promise<void>;
     upsertPerformance(performance: Performance): Promise<{
         __kind__: "ok";
@@ -213,14 +233,4 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    /** Key-value store: set a value */
-    setKV(key: string, value: string): Promise<void>;
-    /** Key-value store: get a value by key */
-    getKV(key: string): Promise<string | null>;
-    /** Key-value store: get all key-value pairs */
-    getAllKV(): Promise<Array<[string, string]>>;
-    /** Key-value store: delete a key */
-    deleteKV(key: string): Promise<void>;
-    /** Key-value store: clear everything */
-    clearAllKV(): Promise<void>;
 }

@@ -133,30 +133,75 @@ export interface _SERVICE {
   'batchSWOTUpload' : ActorMethod<[Array<SWOT>], BatchResult>,
   'batchSalesUpload' : ActorMethod<[Array<SalesRecord>], BatchResult>,
   'batchTopPerformersUpload' : ActorMethod<[Array<TopPerformer>], BatchResult>,
+  /**
+   * / Clear the entire key-value store.
+   */
+  'clearAllKV' : ActorMethod<[], undefined>,
   'compareTopPerformersBySales' : ActorMethod<
     [TopPerformer, TopPerformer],
     Order
   >,
+  /**
+   * / Delete only attendance records
+   */
   'deleteAllAttendance' : ActorMethod<[], undefined>,
+  /**
+   * / Delete all data (employees, sales, attendance, SWOT, performance, feedback, top performers)
+   */
   'deleteAllData' : ActorMethod<[], undefined>,
+  /**
+   * / DELETE OPERATIONS
+   * / Delete all employees and all related data.
+   */
   'deleteAllEmployees' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only feedback/calling records
+   */
   'deleteAllFeedback' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only performance/parameters records
+   */
   'deleteAllPerformances' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only SWOT records
+   */
   'deleteAllSWOT' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only sales records
+   */
   'deleteAllSales' : ActorMethod<[], undefined>,
+  /**
+   * / Delete only top performer records
+   */
   'deleteAllTopPerformers' : ActorMethod<[], undefined>,
   'deleteEmployee' : ActorMethod<[string], undefined>,
+  /**
+   * / Delete a key from the store.
+   */
+  'deleteKV' : ActorMethod<[string], undefined>,
   'getActiveEmployees' : ActorMethod<[], Array<Employee>>,
   'getAllEmployees' : ActorMethod<[], Array<Employee>>,
+  /**
+   * / Get all key-value pairs as an array of (key, value) tuples.
+   */
+  'getAllKV' : ActorMethod<[], Array<[string, string]>>,
   'getAllPerformancesSortedBySII' : ActorMethod<[], Array<Performance>>,
   'getAttendanceByFIPL' : ActorMethod<[string], Array<Attendance>>,
   'getDashboardStats' : ActorMethod<[], DashboardStats>,
   'getEmployee' : ActorMethod<[string], [] | [Employee]>,
   'getFeedbackByFIPL' : ActorMethod<[string], Array<FeedbackEntry>>,
+  /**
+   * / Get a value by key. Returns null if not found.
+   */
+  'getKV' : ActorMethod<[string], [] | [string]>,
   'getPerformanceByFIPL' : ActorMethod<[string], [] | [Performance]>,
   'getSWOTByFIPL' : ActorMethod<[string], [] | [SWOT]>,
   'getSalesByFIPL' : ActorMethod<[string], Array<SalesRecord>>,
   'getTopPerformers' : ActorMethod<[], Array<TopPerformer>>,
+  /**
+   * / Set a key-value pair in the store.
+   */
+  'setKV' : ActorMethod<[string, string], undefined>,
   'updateEmployee' : ActorMethod<[Employee], undefined>,
   'upsertPerformance' : ActorMethod<
     [Performance],
@@ -164,12 +209,6 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'upsertSWOT' : ActorMethod<[SWOT], { 'ok' : null } | { 'err' : string }>,
-  /** Key-value store */
-  'setKV' : ActorMethod<[string, string], undefined>,
-  'getKV' : ActorMethod<[string], [] | [string]>,
-  'getAllKV' : ActorMethod<[], Array<[string, string]>>,
-  'deleteKV' : ActorMethod<[string], undefined>,
-  'clearAllKV' : ActorMethod<[], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

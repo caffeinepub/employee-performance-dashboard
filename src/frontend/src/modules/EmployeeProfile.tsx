@@ -185,6 +185,10 @@ export default function EmployeeProfile({
   const [salesYearFilter, setSalesYearFilter] = useState("all");
   const [salesMonthFilter, setSalesMonthFilter] = useState("all");
 
+  // Attendance filter state
+  const [attendanceYear, setAttendanceYear] = useState("all");
+  const [attendanceMonth, setAttendanceMonth] = useState("all");
+
   // Chart tab state
   const [chartYear, setChartYear] = useState("all");
 
@@ -309,6 +313,73 @@ export default function EmployeeProfile({
       years,
     };
   }, [sales, availableYears]);
+
+  // Derive available years from attendance data
+  const attendanceAvailableYears = useMemo(() => {
+    const years = new Set<string>();
+    for (const a of attendance) {
+      if (!a.date) continue;
+      const parts = a.date.split(/[-/]/).map(Number);
+      let year: number | null = null;
+      if (parts.length === 3) {
+        year = parts[0] > 31 ? parts[0] : parts[2];
+      }
+      if (year && !Number.isNaN(year)) years.add(year.toString());
+    }
+    return Array.from(years).sort((a, b) => Number(b) - Number(a));
+  }, [attendance]);
+
+  const attendanceAvailableMonths = useMemo(() => {
+    const months = new Set<number>();
+    for (const a of attendance) {
+      if (!a.date) continue;
+      const parts = a.date.split(/[-/]/).map(Number);
+      let year: number | null = null;
+      let month: number | null = null;
+      if (parts.length === 3) {
+        if (parts[0] > 31) {
+          year = parts[0];
+          month = parts[1];
+        } else {
+          year = parts[2];
+          month = parts[1];
+        }
+      }
+      if (!year || !month || Number.isNaN(year) || Number.isNaN(month))
+        continue;
+      if (attendanceYear !== "all" && year.toString() !== attendanceYear)
+        continue;
+      months.add(month - 1);
+    }
+    return Array.from(months)
+      .sort((a, b) => a - b)
+      .map((m) => ({ value: m.toString(), label: MONTH_NAMES[m] }));
+  }, [attendance, attendanceYear]);
+
+  const filteredAttendance = useMemo(() => {
+    return attendance.filter((a) => {
+      if (!a.date) return attendanceYear === "all" && attendanceMonth === "all";
+      const parts = a.date.split(/[-/]/).map(Number);
+      let year: number | null = null;
+      let month: number | null = null;
+      if (parts.length === 3) {
+        if (parts[0] > 31) {
+          year = parts[0];
+          month = parts[1];
+        } else {
+          year = parts[2];
+          month = parts[1];
+        }
+      }
+      const yearMatch =
+        attendanceYear === "all" ||
+        (year !== null && year.toString() === attendanceYear);
+      const monthMatch =
+        attendanceMonth === "all" ||
+        (month !== null && month - 1 === Number.parseInt(attendanceMonth));
+      return yearMatch && monthMatch;
+    });
+  }, [attendance, attendanceYear, attendanceMonth]);
 
   // ── Attendance chart ─────────────────────────────────────────────────────
   const filteredFeedback = useMemo(() => {
@@ -513,7 +584,13 @@ export default function EmployeeProfile({
       {employee.personalityData?.scores.some((s) => s > 0) && (
         <div className="bg-card rounded-xl border border-border p-5 mb-4">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <span>🧠</span> Personality Analysis
+            <span>🧠</span>
+            <span>
+              Personality Analysis
+              <span className="block text-xs font-normal text-muted-foreground">
+                (Submitted by the employee)
+              </span>
+            </span>
           </h3>
           <PersonalityPentagon
             traitLabels={employee.personalityData.traitLabels}
@@ -526,7 +603,8 @@ export default function EmployeeProfile({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <UserCircle2 className="w-4 h-4" /> SWOT Analysis
+            <UserCircle2 className="w-4 h-4" /> SWOT Analysis(Done Through 1 on
+            1 Session)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -706,25 +784,25 @@ export default function EmployeeProfile({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
                 {
-                  label: "Sales Influence Index",
+                  label: "Sales Influence Index %",
                   value: perf.salesInfluenceIndex,
                   max: 100,
                   isScore: true,
                 },
                 {
-                  label: "Operational Discipline",
+                  label: "Operational Discipline%",
                   value: perf.operationalDiscipline,
                   max: 100,
                   isScore: true,
                 },
                 {
-                  label: "Product Knowledge",
+                  label: "Product Knowledge %",
                   value: perf.productKnowledgeScore,
                   max: 100,
                   isScore: true,
                 },
                 {
-                  label: "Soft Skills",
+                  label: "Soft Skills%",
                   value: perf.softSkillScore,
                   max: 100,
                   isScore: true,
@@ -741,7 +819,7 @@ export default function EmployeeProfile({
               <div className="sm:col-span-2 border-t border-border pt-3 mt-1">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: "Review Count", value: perf.reviewCount },
+                    { label: "Review Count %", value: perf.reviewCount },
                     { label: "Demo Visits", value: perf.totalDemoVisits },
                     {
                       label: "Complaint Visits",
@@ -1419,8 +1497,8 @@ export default function EmployeeProfile({
 
       {/* Attendance Dropdown */}
       <CollapsibleSection
-        title="Attendance Records"
-        subtitle={`${attendance.length} entries`}
+        title="Lapses Records"
+        subtitle={`${filteredAttendance.length} entries · Total Lapses: ${filteredAttendance.length}`}
       >
         {attendance.length === 0 ? (
           <p
@@ -1430,51 +1508,132 @@ export default function EmployeeProfile({
             No attendance records.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Lab Type</TableHead>
-                  <TableHead>Remarks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attendance.map((a, i) => (
-                  <TableRow
-                    key={`${a.date ?? i}-${a.lapsesType}`}
-                    data-ocid={`employees.item.${i + 1}`}
-                  >
-                    <TableCell className="text-sm">
-                      {a.date
-                        ? (() => {
-                            try {
-                              const d = new Date(a.date);
-                              if (Number.isNaN(d.getTime())) return a.date;
-                              const dd = String(d.getDate()).padStart(2, "0");
-                              const mm = String(d.getMonth() + 1).padStart(
-                                2,
-                                "0",
-                              );
-                              const yyyy = d.getFullYear();
-                              return `${dd}/${mm}/${yyyy}`;
-                            } catch {
-                              return a.date;
-                            }
-                          })()
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {a.lapsesType ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {a.remarks ?? "\u2014"}
-                    </TableCell>
+          <>
+            {/* Year + Month filters */}
+            <div className="flex flex-wrap gap-3 mb-4">
+              <Select
+                value={attendanceYear}
+                onValueChange={(v) => {
+                  setAttendanceYear(v);
+                  setAttendanceMonth("all");
+                }}
+              >
+                <SelectTrigger
+                  className="w-32 h-8 text-sm"
+                  data-ocid="employees.select"
+                >
+                  <SelectValue placeholder="All Years" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {attendanceAvailableYears.map((y) => (
+                    <SelectItem key={y} value={y}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={attendanceMonth}
+                onValueChange={setAttendanceMonth}
+              >
+                <SelectTrigger
+                  className="w-36 h-8 text-sm"
+                  data-ocid="employees.select"
+                >
+                  <SelectValue placeholder="All Months" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Months</SelectItem>
+                  {attendanceAvailableMonths.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {(attendanceYear !== "all" || attendanceMonth !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setAttendanceYear("all");
+                    setAttendanceMonth("all");
+                  }}
+                  data-ocid="employees.secondary_button"
+                >
+                  Clear
+                </Button>
+              )}
+
+              <span className="text-xs text-muted-foreground self-center ml-auto">
+                Total Lapses: <strong>{filteredAttendance.length}</strong>
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Lapses Type</TableHead>
+                    <TableHead>Remarks</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredAttendance.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={3}
+                        className="text-center text-muted-foreground text-sm py-6"
+                      >
+                        No records match the selected filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredAttendance.map((a, i) => (
+                      <TableRow
+                        key={`${a.date ?? i}-${a.lapsesType}`}
+                        data-ocid={`employees.item.${i + 1}`}
+                      >
+                        <TableCell className="text-sm">
+                          {a.date
+                            ? (() => {
+                                try {
+                                  const d = new Date(a.date);
+                                  if (Number.isNaN(d.getTime())) return a.date;
+                                  const dd = String(d.getDate()).padStart(
+                                    2,
+                                    "0",
+                                  );
+                                  const mm = String(d.getMonth() + 1).padStart(
+                                    2,
+                                    "0",
+                                  );
+                                  const yyyy = d.getFullYear();
+                                  return `${dd}/${mm}/${yyyy}`;
+                                } catch {
+                                  return a.date;
+                                }
+                              })()
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {a.lapsesType ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {a.remarks ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </CollapsibleSection>
     </div>
