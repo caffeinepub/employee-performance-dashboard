@@ -72,6 +72,8 @@ export interface EmployeeRecord {
     remark: string | null;
     dateOfCall: string | null;
     agent: string | null;
+    typeOfIssue: string | null;
+    resolution: string | null;
   }>;
 }
 
@@ -449,6 +451,19 @@ async function fetchAllData(): Promise<AllData> {
         cell(row, callSheet.headers, "Date of Call", "Call Date", "Date"),
       ),
       agent: normalizeText(cell(row, callSheet.headers, "Agent", "Agent Name")),
+      typeOfIssue: normalizeText(
+        cell(
+          row,
+          callSheet.headers,
+          "Type of Issue",
+          "Issue Type",
+          "Type",
+          "Issue",
+        ),
+      ),
+      resolution: normalizeText(
+        cell(row, callSheet.headers, "Resolution", "Resolve", "Resolved"),
+      ),
     });
   }
   console.log(`[Call Records] Loaded ${callSheet.rows.length} records`);

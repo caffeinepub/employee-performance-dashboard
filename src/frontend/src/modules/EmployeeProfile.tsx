@@ -802,7 +802,7 @@ export default function EmployeeProfile({
                   isScore: true,
                 },
                 {
-                  label: "Soft Skills%",
+                  label: "Soft Skills %",
                   value: perf.softSkillScore,
                   max: 100,
                   isScore: true,

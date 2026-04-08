@@ -19,6 +19,8 @@ export interface GoogleSheetCallRecord {
   remark: string;
   callDate: string;
   agent: string;
+  typeOfIssue: string;
+  resolution: string;
 }
 
 // Fetch ALL call records directly — no employee-linking, no rows dropped
@@ -52,6 +54,14 @@ async function fetchCallRecords(): Promise<GoogleSheetCallRecord[]> {
         parseDate(callDateRaw) ?? normalizeText(callDateRaw) ?? "";
       const agent =
         normalizeText(cell(row, headers, "Agent", "Agent Name")) ?? "";
+      const typeOfIssue =
+        normalizeText(
+          cell(row, headers, "Type of Issue", "Issue Type", "Type", "Issue"),
+        ) ?? "";
+      const resolution =
+        normalizeText(
+          cell(row, headers, "Resolution", "Resolve", "Resolved"),
+        ) ?? "";
 
       return {
         id: `cr-${idx}`,
@@ -64,6 +74,8 @@ async function fetchCallRecords(): Promise<GoogleSheetCallRecord[]> {
         remark,
         callDate,
         agent,
+        typeOfIssue,
+        resolution,
       };
     })
     .filter((r) => r.fiplCode !== "" || r.fseName !== "");

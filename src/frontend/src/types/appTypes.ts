@@ -104,6 +104,8 @@ export interface FeedbackEntry {
   remark: string;
   callDate: string;
   agent: string;
+  typeOfIssue?: string;
+  resolution?: string;
 }
 
 export interface TopPerformer {

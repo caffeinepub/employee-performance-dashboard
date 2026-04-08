@@ -26,10 +26,11 @@ import {
   TableIcon,
   Upload,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PasswordGate, usePasswordGate } from "../components/PasswordGate";
 import { useLabels } from "../contexts/UILabelsContext";
+import { useEmployees } from "../hooks/useAllEmployeeData";
 import { useGoogleSheetCallRecords } from "../hooks/useGoogleSheetCallRecords";
 import {
   Variant_tineco_ecovacs_coway_kuvings_instant,
@@ -43,6 +44,16 @@ import type { FeedbackEntry } from "../hooks/useQueries";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const BRANDS = ["Ecovacs", "Kuvings", "Coway", "Tineco", "Instant"] as const;
+
+const KNOWN_ISSUE_TYPES = [
+  "FSE Issue",
+  "Operations & Scheduling Issue",
+  "Brand Issue",
+  "Technical/Product Issue",
+  "After-Sales & Support Issue",
+  "Satisfied",
+  "Sent Google Form",
+];
 
 const BRAND_COLORS: Record<string, string> = {
   ecovacs: "bg-blue-100 text-blue-700 border-blue-200",
@@ -76,6 +87,9 @@ interface DisplayRecord {
   callDate: string;
   agent: string;
   source: "sheet" | "manual";
+  typeOfIssue: string;
+  resolution: string;
+  region: string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -149,6 +163,12 @@ function brandEnumToStr(
   return map[String(b)] ?? String(b);
 }
 
+const normalizeKey = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
 // ─── Main Component ───────────────────────────────────────────────────────────────
 
 export default function Feedback() {
@@ -156,6 +176,9 @@ export default function Feedback() {
   // Google Sheet live data
   const { data: sheetRecords = [], isLoading: sheetLoading } =
     useGoogleSheetCallRecords();
+
+  // Employee data for region lookup
+  const { data: liveEmployees = [] } = useEmployees();
 
   // Backend manual records
   const { data: employees = [] } = useAllEmployees();
@@ -172,6 +195,17 @@ export default function Feedback() {
     [employees],
   );
 
+  // Build FIPL → region map from live employee data (normalized keys)
+  const regionMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const emp of liveEmployees) {
+      if (emp.fiplCode && emp.region) {
+        map[normalizeKey(emp.fiplCode)] = emp.region;
+      }
+    }
+    return map;
+  }, [liveEmployees]);
+
   // Convert Google Sheet records to DisplayRecord
   const sheetDisplayRecords: DisplayRecord[] = useMemo(
     () =>
@@ -187,8 +221,11 @@ export default function Feedback() {
         callDate: r.callDate,
         agent: r.agent,
         source: "sheet" as const,
+        typeOfIssue: r.typeOfIssue ?? "",
+        resolution: r.resolution ?? "",
+        region: regionMap[normalizeKey(r.fiplCode)] ?? "",
       })),
-    [sheetRecords],
+    [sheetRecords, regionMap],
   );
 
   // Convert backend FeedbackEntry to DisplayRecord
@@ -207,8 +244,11 @@ export default function Feedback() {
         callDate: f.callDate,
         agent: f.agent,
         source: "manual" as const,
+        typeOfIssue: "",
+        resolution: "",
+        region: regionMap[normalizeKey(f.fiplCode)] ?? "",
       })),
-    [backendFeedback, nameMap],
+    [backendFeedback, nameMap, regionMap],
   );
 
   // Merge: Google Sheet records first, then any manually-added backend records
@@ -223,6 +263,8 @@ export default function Feedback() {
   const [cesFilter, setCesFilter] = useState<"all" | "positive" | "negative">(
     "all",
   );
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [issueTypeFilter, setIssueTypeFilter] = useState("all");
   const [remarkRecord, setRemarkRecord] = useState<DisplayRecord | null>(null);
   const [page, setPage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -236,26 +278,59 @@ export default function Feedback() {
     "upload" | "addRecord" | null
   >(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: cesFilter is used inside
+  // Reset page when any filter changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — reset page on any filter change
+  useEffect(() => {
+    setPage(0);
+  }, [search, brandFilter, cesFilter, regionFilter, issueTypeFilter]);
+
+  // Dynamic region options from data
+  const regionOptions = useMemo(
+    () => [...new Set(allRecords.map((r) => r.region).filter(Boolean))].sort(),
+    [allRecords],
+  );
+
+  // Dynamic issue type options: known types + any extras found in data
+  const issueTypeOptions = useMemo(() => {
+    const fromData = allRecords.map((r) => r.typeOfIssue).filter(Boolean);
+    const combined = new Set([...KNOWN_ISSUE_TYPES, ...fromData]);
+    return [...combined];
+  }, [allRecords]);
+
+  // Combined filter — ALL conditions ANDed on actual dataset
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return allRecords.filter((f) => {
+    return allRecords.filter((r) => {
       const matchSearch =
         !q ||
-        f.customerName.toLowerCase().includes(q) ||
-        f.fiplCode.toLowerCase().includes(q) ||
-        f.product.toLowerCase().includes(q) ||
-        f.agent.toLowerCase().includes(q);
+        (r.customerName || "").toLowerCase().includes(q) ||
+        (r.fiplCode || "").toLowerCase().includes(q) ||
+        (r.product || "").toLowerCase().includes(q) ||
+        (r.agent || "").toLowerCase().includes(q) ||
+        (r.fseName || "").toLowerCase().includes(q) ||
+        (r.brand || "").toLowerCase().includes(q);
       const matchBrand =
         brandFilter === "all" ||
-        f.brand.toLowerCase() === brandFilter.toLowerCase();
+        r.brand.toLowerCase() === brandFilter.toLowerCase();
       const matchCes =
         cesFilter === "all" ||
-        (cesFilter === "positive" && f.cesScore > 30) ||
-        (cesFilter === "negative" && f.cesScore <= 30);
-      return matchSearch && matchBrand && matchCes;
+        (cesFilter === "positive" && r.cesScore > 30) ||
+        (cesFilter === "negative" && r.cesScore <= 30);
+      const matchRegion = regionFilter === "all" || r.region === regionFilter;
+      const matchIssueType =
+        issueTypeFilter === "all" || r.typeOfIssue === issueTypeFilter;
+      return (
+        matchSearch && matchBrand && matchCes && matchRegion && matchIssueType
+      );
     });
-  }, [allRecords, search, brandFilter, cesFilter]);
+  }, [
+    allRecords,
+    search,
+    brandFilter,
+    cesFilter,
+    regionFilter,
+    issueTypeFilter,
+  ]);
 
   const pages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -304,7 +379,10 @@ export default function Feedback() {
         const data = evt.target?.result;
         const workbook = XLSX.read(data, { type: "binary" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(
+          sheet,
+          { defval: "" },
+        );
 
         const brandMap: Record<
           string,
@@ -412,316 +490,370 @@ export default function Feedback() {
       {/* ─── View: Calling Records ─────────────────────────────────────────────── */}
       {view === "table" && (
         <div className="space-y-4">
-          {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          {/* Toolbar — row 1: search */}
+          <div className="flex flex-col gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 data-ocid="feedback.search_input"
                 className="pl-9"
-                placeholder="Search customer, agent, product, FIPL..."
+                placeholder="Search by employee, FIPL, customer, brand, product, agent..."
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(0);
-                }}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Select
-              value={brandFilter}
-              onValueChange={(v) => {
-                setBrandFilter(v);
-                setPage(0);
-              }}
-            >
-              <SelectTrigger className="w-44" data-ocid="feedback.select">
-                <SelectValue placeholder="All Brands" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {BRANDS.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={cesFilter}
-              onValueChange={(v) => {
-                setCesFilter(v as "all" | "positive" | "negative");
-                setPage(0);
-              }}
-            >
-              <SelectTrigger className="w-44" data-ocid="feedback.select">
-                <SelectValue placeholder="All Feedbacks" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Feedbacks</SelectItem>
-                <SelectItem value="positive">Positive (CES &gt;30)</SelectItem>
-                <SelectItem value="negative">Negative (CES ≤30)</SelectItem>
-              </SelectContent>
-            </Select>
 
-            {/* Upload Excel */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.csv"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-            <Button
-              variant="outline"
-              data-ocid="feedback.upload_button"
-              onClick={() => {
-                if (writeGranted) {
-                  fileInputRef.current?.click();
-                } else {
-                  setPendingAction("upload");
-                }
-              }}
-              disabled={batchUpload.isPending}
-            >
-              {batchUpload.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Upload className="w-4 h-4 mr-2" />
-              )}
-              Upload Excel
-            </Button>
-
-            {/* Add Record Button */}
-            <Button
-              data-ocid="feedback.open_modal_button"
-              onClick={() => {
-                if (writeGranted) {
-                  setDialogOpen(true);
-                } else {
-                  setPendingAction("addRecord");
-                }
-              }}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Record
-            </Button>
-
-            {/* Add Record Dialog (controlled) */}
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogContent
-                className="max-w-lg max-h-[90vh] overflow-y-auto"
-                data-ocid="feedback.dialog"
+            {/* Toolbar — row 2: filters + actions */}
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Brand filter */}
+              <Select
+                value={brandFilter}
+                onValueChange={(v) => setBrandFilter(v)}
               >
-                <DialogHeader>
-                  <DialogTitle>Add Calling Record</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>FIPL Code</Label>
-                      <Input
-                        data-ocid="feedback.input"
-                        value={form.fiplCode}
-                        onChange={(e) =>
-                          handleFormChange("fiplCode", e.target.value)
-                        }
-                        placeholder="e.g. FIPL-001"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Customer Name</Label>
-                      <Input
-                        value={form.customerName}
-                        onChange={(e) =>
-                          handleFormChange("customerName", e.target.value)
-                        }
-                        placeholder="Full name"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Contact</Label>
-                      <Input
-                        value={form.contact}
-                        onChange={(e) =>
-                          handleFormChange("contact", e.target.value)
-                        }
-                        placeholder="Phone / email"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Brand</Label>
-                      <Select
-                        value={form.brand}
-                        onValueChange={(v) =>
-                          handleFormChange(
-                            "brand",
-                            v as Variant_tineco_ecovacs_coway_kuvings_instant,
-                          )
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {BRANDS.map((b) => (
-                            <SelectItem
-                              key={b.toLowerCase()}
-                              value={b.toLowerCase()}
-                            >
-                              {b}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Product</Label>
-                      <Input
-                        value={form.product}
-                        onChange={(e) =>
-                          handleFormChange("product", e.target.value)
-                        }
-                        placeholder="Product name"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>CES Score (0–40)</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={40}
-                        value={form.cesScore}
-                        onChange={(e) =>
-                          handleFormChange("cesScore", Number(e.target.value))
-                        }
-                      />
-                    </div>
-                  </div>
+                <SelectTrigger className="w-40" data-ocid="feedback.select">
+                  <SelectValue placeholder="All Brands" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Brands</SelectItem>
+                  {BRANDS.map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {b}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* CES filter */}
+              <Select
+                value={cesFilter}
+                onValueChange={(v) =>
+                  setCesFilter(v as "all" | "positive" | "negative")
+                }
+              >
+                <SelectTrigger className="w-44" data-ocid="feedback.select">
+                  <SelectValue placeholder="All Feedbacks" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Feedbacks</SelectItem>
+                  <SelectItem value="positive">
+                    Positive (CES &gt;30)
+                  </SelectItem>
+                  <SelectItem value="negative">Negative (CES ≤30)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Region filter */}
+              <Select
+                value={regionFilter}
+                onValueChange={(v) => setRegionFilter(v)}
+              >
+                <SelectTrigger className="w-40" data-ocid="feedback.select">
+                  <SelectValue placeholder="All Regions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Regions</SelectItem>
+                  {regionOptions.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Type of Issue filter */}
+              <Select
+                value={issueTypeFilter}
+                onValueChange={(v) => setIssueTypeFilter(v)}
+              >
+                <SelectTrigger className="w-52" data-ocid="feedback.select">
+                  <SelectValue placeholder="All Issue Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Issue Types</SelectItem>
+                  {issueTypeOptions.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex-1" />
+
+              {/* Upload Excel */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.csv"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              <Button
+                variant="outline"
+                data-ocid="feedback.upload_button"
+                onClick={() => {
+                  if (writeGranted) {
+                    fileInputRef.current?.click();
+                  } else {
+                    setPendingAction("upload");
+                  }
+                }}
+                disabled={batchUpload.isPending}
+              >
+                {batchUpload.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4 mr-2" />
+                )}
+                Upload Excel
+              </Button>
+
+              {/* Add Record Button */}
+              <Button
+                data-ocid="feedback.open_modal_button"
+                onClick={() => {
+                  if (writeGranted) {
+                    setDialogOpen(true);
+                  } else {
+                    setPendingAction("addRecord");
+                  }
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Record
+              </Button>
+            </div>
+          </div>
+
+          {/* Add Record Dialog (controlled) */}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogContent
+              className="max-w-lg max-h-[90vh] overflow-y-auto"
+              data-ocid="feedback.dialog"
+            >
+              <DialogHeader>
+                <DialogTitle>Add Calling Record</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label>Remark</Label>
-                    <Textarea
-                      data-ocid="feedback.textarea"
-                      value={form.remark}
+                    <Label>FIPL Code</Label>
+                    <Input
+                      data-ocid="feedback.input"
+                      value={form.fiplCode}
                       onChange={(e) =>
-                        handleFormChange("remark", e.target.value)
+                        handleFormChange("fiplCode", e.target.value)
                       }
-                      rows={3}
-                      placeholder="Notes about the call..."
+                      placeholder="e.g. FIPL-001"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Date of Call</Label>
-                      <Input
-                        type="date"
-                        value={form.callDate}
-                        onChange={(e) =>
-                          handleFormChange("callDate", e.target.value)
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Agent</Label>
-                      <Input
-                        value={form.agent}
-                        onChange={(e) =>
-                          handleFormChange("agent", e.target.value)
-                        }
-                        placeholder="Agent name"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label>Customer Name</Label>
+                    <Input
+                      value={form.customerName}
+                      onChange={(e) =>
+                        handleFormChange("customerName", e.target.value)
+                      }
+                      placeholder="Full name"
+                    />
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    data-ocid="feedback.cancel_button"
-                    onClick={() => setDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    data-ocid="feedback.submit_button"
-                    onClick={handleAddRecord}
-                    disabled={addFeedback.isPending}
-                  >
-                    {addFeedback.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : null}
-                    Save Record
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Remark Preview Dialog */}
-            <Dialog
-              open={remarkRecord !== null}
-              onOpenChange={(open) => {
-                if (!open) setRemarkRecord(null);
-              }}
-            >
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Feedback Details</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <span className="font-semibold">Customer: </span>
-                    {remarkRecord?.customerName}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Contact</Label>
+                    <Input
+                      value={form.contact}
+                      onChange={(e) =>
+                        handleFormChange("contact", e.target.value)
+                      }
+                      placeholder="Phone / email"
+                    />
                   </div>
-                  <div>
-                    <span className="font-semibold">FIPL Code: </span>
-                    {remarkRecord?.fiplCode}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Brand: </span>
-                    {remarkRecord?.brand}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Product: </span>
-                    {remarkRecord?.product}
-                  </div>
-                  <div>
-                    <span className="font-semibold">CES Score: </span>
-                    <span
-                      className={
-                        remarkRecord && remarkRecord.cesScore <= 30
-                          ? "text-red-600 font-semibold"
-                          : "text-green-600 font-semibold"
+                  <div className="space-y-1.5">
+                    <Label>Brand</Label>
+                    <Select
+                      value={form.brand}
+                      onValueChange={(v) =>
+                        handleFormChange(
+                          "brand",
+                          v as Variant_tineco_ecovacs_coway_kuvings_instant,
+                        )
                       }
                     >
-                      {remarkRecord?.cesScore} (
-                      {remarkRecord && remarkRecord.cesScore > 30
-                        ? "Positive"
-                        : "Negative"}
-                      )
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-semibold">Date: </span>
-                    {remarkRecord?.callDate}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Agent: </span>
-                    {remarkRecord?.agent}
-                  </div>
-                  <div className="border-t pt-3">
-                    <span className="font-semibold block mb-1">
-                      Full Remark:
-                    </span>
-                    <p className="text-muted-foreground leading-relaxed">
-                      {remarkRecord?.remark || "No remark"}
-                    </p>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BRANDS.map((b) => (
+                          <SelectItem
+                            key={b.toLowerCase()}
+                            value={b.toLowerCase()}
+                          >
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Product</Label>
+                    <Input
+                      value={form.product}
+                      onChange={(e) =>
+                        handleFormChange("product", e.target.value)
+                      }
+                      placeholder="Product name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>CES Score (0–40)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={40}
+                      value={form.cesScore}
+                      onChange={(e) =>
+                        handleFormChange("cesScore", Number(e.target.value))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Remark</Label>
+                  <Textarea
+                    data-ocid="feedback.textarea"
+                    value={form.remark}
+                    onChange={(e) => handleFormChange("remark", e.target.value)}
+                    rows={3}
+                    placeholder="Notes about the call..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Date of Call</Label>
+                    <Input
+                      type="date"
+                      value={form.callDate}
+                      onChange={(e) =>
+                        handleFormChange("callDate", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Agent</Label>
+                    <Input
+                      value={form.agent}
+                      onChange={(e) =>
+                        handleFormChange("agent", e.target.value)
+                      }
+                      placeholder="Agent name"
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  data-ocid="feedback.cancel_button"
+                  onClick={() => setDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  data-ocid="feedback.submit_button"
+                  onClick={handleAddRecord}
+                  disabled={addFeedback.isPending}
+                >
+                  {addFeedback.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : null}
+                  Save Record
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Remark Preview Dialog */}
+          <Dialog
+            open={remarkRecord !== null}
+            onOpenChange={(open) => {
+              if (!open) setRemarkRecord(null);
+            }}
+          >
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Feedback Details</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <span className="font-semibold">FSE / Employee: </span>
+                  {remarkRecord?.fseName || remarkRecord?.fiplCode || "—"}
+                </div>
+                <div>
+                  <span className="font-semibold">FIPL Code: </span>
+                  {remarkRecord?.fiplCode}
+                </div>
+                {remarkRecord?.region && (
+                  <div>
+                    <span className="font-semibold">Region: </span>
+                    {remarkRecord.region}
+                  </div>
+                )}
+                <div>
+                  <span className="font-semibold">Customer: </span>
+                  {remarkRecord?.customerName}
+                </div>
+                <div>
+                  <span className="font-semibold">Brand: </span>
+                  {remarkRecord?.brand}
+                </div>
+                <div>
+                  <span className="font-semibold">Product: </span>
+                  {remarkRecord?.product}
+                </div>
+                <div>
+                  <span className="font-semibold">CES Score: </span>
+                  <span
+                    className={
+                      remarkRecord && remarkRecord.cesScore <= 30
+                        ? "text-red-600 font-semibold"
+                        : "text-green-600 font-semibold"
+                    }
+                  >
+                    {remarkRecord?.cesScore} (
+                    {remarkRecord && remarkRecord.cesScore > 30
+                      ? "Positive"
+                      : "Negative"}
+                    )
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold">Date: </span>
+                  {remarkRecord?.callDate}
+                </div>
+                <div>
+                  <span className="font-semibold">Agent: </span>
+                  {remarkRecord?.agent || "—"}
+                </div>
+                <div>
+                  <span className="font-semibold">Type of Issue: </span>
+                  {remarkRecord?.typeOfIssue || "—"}
+                </div>
+                <div>
+                  <span className="font-semibold">Resolution: </span>
+                  {remarkRecord?.resolution || "—"}
+                </div>
+                <div className="border-t pt-3">
+                  <span className="font-semibold block mb-1">Full Remark:</span>
+                  <p className="text-muted-foreground leading-relaxed">
+                    {remarkRecord?.remark || "No remark"}
+                  </p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Summary bar */}
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -760,10 +892,11 @@ export default function Feedback() {
                     "Date of Call",
                     "FSE",
                     "Customer Name",
-                    "Contact",
+                    "Region",
                     "Brand",
                     "Product",
                     "CES Score",
+                    "Type of Issue",
                     "Remark",
                     "Agent",
                   ].map((h) => (
@@ -780,7 +913,7 @@ export default function Feedback() {
                 {isLoading ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-4 py-10 text-center text-muted-foreground"
                       data-ocid="feedback.loading_state"
                     >
@@ -791,7 +924,7 @@ export default function Feedback() {
                 ) : paginated.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-4 py-10 text-center text-muted-foreground"
                       data-ocid="feedback.empty_state"
                     >
@@ -821,8 +954,8 @@ export default function Feedback() {
                       <td className="px-4 py-3 font-medium">
                         {f.customerName}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground text-sm">
-                        {f.contact}
+                      <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
+                        {f.region || "—"}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -836,6 +969,15 @@ export default function Feedback() {
                       <td className="px-4 py-3 text-sm">{f.product}</td>
                       <td className="px-4 py-3">
                         <CesBadge score={f.cesScore} />
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {f.typeOfIssue ? (
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border bg-violet-50 text-violet-700 border-violet-200 whitespace-nowrap">
+                            {f.typeOfIssue}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 max-w-[200px] text-sm text-muted-foreground">
                         <button
@@ -890,32 +1032,86 @@ export default function Feedback() {
       {view === "masonry" && (
         <div className="space-y-4">
           {/* Masonry toolbar */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Search customer, product, agent..."
+                placeholder="Search by employee, FIPL, customer, brand, product, agent..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Select
-              value={brandFilter}
-              onValueChange={(v) => setBrandFilter(v)}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="All Brands" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {BRANDS.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
+            <div className="flex flex-wrap gap-2">
+              <Select
+                value={brandFilter}
+                onValueChange={(v) => setBrandFilter(v)}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="All Brands" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Brands</SelectItem>
+                  {BRANDS.map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {b}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={cesFilter}
+                onValueChange={(v) =>
+                  setCesFilter(v as "all" | "positive" | "negative")
+                }
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="All Feedbacks" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Feedbacks</SelectItem>
+                  <SelectItem value="positive">
+                    Positive (CES &gt;30)
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <SelectItem value="negative">Negative (CES ≤30)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={regionFilter}
+                onValueChange={(v) => setRegionFilter(v)}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="All Regions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Regions</SelectItem>
+                  {regionOptions.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={issueTypeFilter}
+                onValueChange={(v) => setIssueTypeFilter(v)}
+              >
+                <SelectTrigger className="w-52">
+                  <SelectValue placeholder="All Issue Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Issue Types</SelectItem>
+                  {issueTypeOptions.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {isLoading ? (
@@ -1004,7 +1200,7 @@ function ReviewCard({
       </div>
 
       {/* Brand badge */}
-      <div className="mb-2">
+      <div className="mb-2 flex flex-wrap gap-1">
         <span
           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${brandColorClass(
             f.brand,
@@ -1012,6 +1208,11 @@ function ReviewCard({
         >
           {f.brand}
         </span>
+        {f.typeOfIssue && (
+          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border bg-violet-50 text-violet-700 border-violet-200">
+            {f.typeOfIssue}
+          </span>
+        )}
       </div>
 
       {/* Product */}
@@ -1021,6 +1222,14 @@ function ReviewCard({
       {f.remark && (
         <p className="text-sm text-muted-foreground leading-relaxed mb-3">
           {f.remark}
+        </p>
+      )}
+
+      {/* Resolution */}
+      {f.resolution && (
+        <p className="text-xs text-muted-foreground italic mb-2">
+          <span className="font-semibold not-italic">Resolution:</span>{" "}
+          {f.resolution}
         </p>
       )}
 
@@ -1036,6 +1245,11 @@ function ReviewCard({
           <p className="text-xs text-muted-foreground">
             FSE: <span className="font-medium">{f.fseName || f.fiplCode}</span>{" "}
             {f.fseName && <span className="font-mono">({f.fiplCode})</span>}
+          </p>
+        )}
+        {f.region && (
+          <p className="text-xs text-muted-foreground">
+            Region: <span className="font-medium">{f.region}</span>
           </p>
         )}
       </div>
