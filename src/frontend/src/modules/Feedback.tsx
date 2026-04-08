@@ -55,6 +55,79 @@ const KNOWN_ISSUE_TYPES = [
   "Sent Google Form",
 ];
 
+// ─── Issue Category Classification ───────────────────────────────────────────
+
+export const ISSUE_CATEGORIES = [
+  {
+    key: "FSE Issue",
+    label: "FSE Issue",
+    color:
+      "bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200",
+  },
+  {
+    key: "Operation and Scheduling Issue",
+    label: "Operation & Scheduling",
+    color: "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200",
+  },
+  {
+    key: "Brand Issue",
+    label: "Brand Issue",
+    color: "bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200",
+  },
+  {
+    key: "Technical and Product Issue",
+    label: "Technical & Product",
+    color:
+      "bg-violet-100 text-violet-800 border-violet-300 hover:bg-violet-200",
+  },
+  {
+    key: "After-Sales Issue",
+    label: "After-Sales Issue",
+    color:
+      "bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-200",
+  },
+  {
+    key: "Satisfied and Google Form Sent",
+    label: "Satisfied / Google Form",
+    color:
+      "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200",
+  },
+  {
+    key: "Wow Factor",
+    label: "Wow Factor",
+    color:
+      "bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200",
+  },
+] as const;
+
+type CategoryKey = (typeof ISSUE_CATEGORIES)[number]["key"];
+
+/**
+ * Classify a raw typeOfIssue string into one or more broad category keys.
+ * A record can match multiple categories.
+ */
+export function classifyIssue(rawText: string): CategoryKey[] {
+  if (!rawText) return [];
+  const t = rawText.toLowerCase();
+  const matched: CategoryKey[] = [];
+  if (t.includes("fse")) matched.push("FSE Issue");
+  if (t.includes("operat") || t.includes("schedul"))
+    matched.push("Operation and Scheduling Issue");
+  if (t.includes("brand")) matched.push("Brand Issue");
+  if (t.includes("tech") || t.includes("product"))
+    matched.push("Technical and Product Issue");
+  if (t.includes("after") || t.includes("support"))
+    matched.push("After-Sales Issue");
+  if (
+    t.includes("satisf") ||
+    t.includes("google form") ||
+    t.includes("sent google")
+  )
+    matched.push("Satisfied and Google Form Sent");
+  if (t.includes("wow")) matched.push("Wow Factor");
+  return matched;
+}
+
 const BRAND_COLORS: Record<string, string> = {
   ecovacs: "bg-blue-100 text-blue-700 border-blue-200",
   kuvings: "bg-orange-100 text-orange-700 border-orange-200",
@@ -265,6 +338,8 @@ export default function Feedback() {
   );
   const [regionFilter, setRegionFilter] = useState("all");
   const [issueTypeFilter, setIssueTypeFilter] = useState("all");
+  const [activeCategoryFilter, setActiveCategoryFilter] =
+    useState<CategoryKey | null>(null);
   const [remarkRecord, setRemarkRecord] = useState<DisplayRecord | null>(null);
   const [page, setPage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -282,7 +357,14 @@ export default function Feedback() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — reset page on any filter change
   useEffect(() => {
     setPage(0);
-  }, [search, brandFilter, cesFilter, regionFilter, issueTypeFilter]);
+  }, [
+    search,
+    brandFilter,
+    cesFilter,
+    regionFilter,
+    issueTypeFilter,
+    activeCategoryFilter,
+  ]);
 
   // Dynamic region options from data
   const regionOptions = useMemo(
@@ -319,8 +401,16 @@ export default function Feedback() {
       const matchRegion = regionFilter === "all" || r.region === regionFilter;
       const matchIssueType =
         issueTypeFilter === "all" || r.typeOfIssue === issueTypeFilter;
+      const matchCategory =
+        !activeCategoryFilter ||
+        classifyIssue(r.typeOfIssue).includes(activeCategoryFilter);
       return (
-        matchSearch && matchBrand && matchCes && matchRegion && matchIssueType
+        matchSearch &&
+        matchBrand &&
+        matchCes &&
+        matchRegion &&
+        matchIssueType &&
+        matchCategory
       );
     });
   }, [
@@ -330,10 +420,35 @@ export default function Feedback() {
     cesFilter,
     regionFilter,
     issueTypeFilter,
+    activeCategoryFilter,
   ]);
 
   const pages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Category counts from ALL records (unfiltered, for the sidebar chips)
+  const categoryCounts = useMemo(() => {
+    const counts: Record<CategoryKey, number> = {
+      "FSE Issue": 0,
+      "Operation and Scheduling Issue": 0,
+      "Brand Issue": 0,
+      "Technical and Product Issue": 0,
+      "After-Sales Issue": 0,
+      "Satisfied and Google Form Sent": 0,
+      "Wow Factor": 0,
+    };
+    for (const r of allRecords) {
+      for (const cat of classifyIssue(r.typeOfIssue)) {
+        counts[cat] = (counts[cat] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [allRecords]);
+
+  const maxCategoryCount = useMemo(
+    () => Math.max(1, ...Object.values(categoryCounts)),
+    [categoryCounts],
+  );
 
   const avgCes =
     allRecords.length > 0
@@ -484,6 +599,66 @@ export default function Feedback() {
             <Grid2X2 className="w-4 h-4" />
             {labels.customerReviewsTab}
           </button>
+        </div>
+      </div>
+
+      {/* ─── Issue Category Chips ──────────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Filter by Category
+          </span>
+          {activeCategoryFilter && (
+            <button
+              type="button"
+              onClick={() => setActiveCategoryFilter(null)}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div
+          className="flex flex-wrap gap-2"
+          data-ocid="feedback.category_chips"
+        >
+          {ISSUE_CATEGORIES.map((cat) => {
+            const count = categoryCounts[cat.key] || 0;
+            const pct = Math.round((count / maxCategoryCount) * 100);
+            const isActive = activeCategoryFilter === cat.key;
+            return (
+              <button
+                key={cat.key}
+                type="button"
+                onClick={() =>
+                  setActiveCategoryFilter(isActive ? null : cat.key)
+                }
+                data-ocid={`feedback.category.${cat.key.toLowerCase().replace(/\s+/g, "_")}`}
+                className={`group relative flex flex-col gap-1 px-3 py-2 rounded-xl border text-xs font-medium transition-all min-w-[120px] ${cat.color} ${
+                  isActive
+                    ? "ring-2 ring-offset-1 ring-current shadow-md scale-105"
+                    : "opacity-80 hover:opacity-100 hover:scale-105"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate">{cat.label}</span>
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] px-1.5 py-0 shrink-0 bg-white/60 text-current border-0"
+                  >
+                    {count}
+                  </Badge>
+                </span>
+                {/* Progress bar */}
+                <span className="block h-1 rounded-full bg-current/20 overflow-hidden">
+                  <span
+                    className="block h-full rounded-full bg-current/60 transition-all duration-500"
+                    style={{ width: `${pct}%` }}
+                  />
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

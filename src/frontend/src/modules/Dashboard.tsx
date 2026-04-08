@@ -14,13 +14,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
-  PauseCircle,
   RefreshCw,
+  TrendingUp,
   Trophy,
-  Users,
 } from "lucide-react";
+import { useMemo } from "react";
 import { useLabels } from "../contexts/UILabelsContext";
 import { useGoogleSheetData } from "../hooks/useGoogleSheetData";
+import { useAllSales } from "../hooks/useGoogleSheetSales";
 
 function formatLastRefreshed(date: Date | null): string {
   if (!date) return "Never";
@@ -32,6 +33,39 @@ function formatLastRefreshed(date: Date | null): string {
   if (diffMin < 60) return `${diffMin} min ago`;
   const diffHr = Math.floor(diffMin / 60);
   return `${diffHr}h ago`;
+}
+
+function formatRupeeAmount(amount: number): string {
+  if (amount >= 1_00_00_000) return `₹${(amount / 1_00_00_000).toFixed(1)}Cr`;
+  if (amount >= 1_00_000) return `₹${(amount / 1_00_000).toFixed(1)}L`;
+  if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
+  return `₹${amount}`;
+}
+
+function parseSaleYear(dateStr: string): number {
+  if (!dateStr) return Number.NaN;
+  const v = dateStr.trim();
+  if (v.includes("T")) {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? Number.NaN : d.getFullYear();
+  }
+  const parts = v.split("-").map(Number);
+  if (parts[0] > 31) return parts[0]; // YYYY-MM-DD
+  return parts[2]; // DD-MM-YYYY
+}
+
+function parseSaleYearMonth(dateStr: string): { year: number; month: number } {
+  if (!dateStr) return { year: Number.NaN, month: Number.NaN };
+  const v = dateStr.trim();
+  if (v.includes("T")) {
+    const d = new Date(v);
+    if (!Number.isNaN(d.getTime()))
+      return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    return { year: Number.NaN, month: Number.NaN };
+  }
+  const parts = v.split("-").map(Number);
+  if (parts[0] > 31) return { year: parts[0], month: parts[1] };
+  return { year: parts[2], month: parts[1] };
 }
 
 function StatCard({
@@ -100,13 +134,83 @@ function getRankBadge(rank: number) {
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const { data, isLoading, isFetching, isError } = useGoogleSheetData();
+  const { data: allSalesRecords = [], isLoading: salesLoading } = useAllSales();
 
   const activeCount = data?.activeCount ?? 0;
-  const onHoldCount = data?.onHoldCount ?? 0;
-  const totalCount = data?.totalCount ?? 0;
   const topPerformers = data?.topPerformers ?? [];
 
   const { labels } = useLabels();
+
+  // ── Sales KPIs ────────────────────────────────────────────────────────────
+  const { lastMonthSales, lastMonthLabel, currentYearSales } = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    let currentYearTotal = 0;
+
+    // Find max year and max month in that year from sales data
+    let maxYear = -1;
+    let maxMonth = -1;
+
+    for (const s of allSalesRecords) {
+      const { year, month } = parseSaleYearMonth(s.date);
+      if (Number.isNaN(year) || Number.isNaN(month)) continue;
+      if (year > maxYear || (year === maxYear && month > maxMonth)) {
+        if (year > maxYear) {
+          maxYear = year;
+          maxMonth = month;
+        } else {
+          maxMonth = month;
+        }
+      }
+    }
+    // Recompute maxMonth properly
+    maxYear = -1;
+    maxMonth = -1;
+    for (const s of allSalesRecords) {
+      const { year, month } = parseSaleYearMonth(s.date);
+      if (Number.isNaN(year) || Number.isNaN(month)) continue;
+      if (year > maxYear) {
+        maxYear = year;
+        maxMonth = month;
+      } else if (year === maxYear && month > maxMonth) {
+        maxMonth = month;
+      }
+    }
+
+    let lastMonthTotal = 0;
+    const MONTHS = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    for (const s of allSalesRecords) {
+      const { year, month } = parseSaleYearMonth(s.date);
+      if (Number.isNaN(year)) continue;
+      if (year === maxYear && month === maxMonth) lastMonthTotal += s.amount;
+      const sYear = parseSaleYear(s.date);
+      if (sYear === currentYear) currentYearTotal += s.amount;
+    }
+
+    const lbl =
+      maxYear > 0 && maxMonth > 0 ? `${MONTHS[maxMonth - 1]} ${maxYear}` : "—";
+
+    return {
+      lastMonthSales: lastMonthTotal,
+      lastMonthLabel: lbl,
+      currentYearSales: currentYearTotal,
+    };
+  }, [allSalesRecords]);
+
+  const combinedLoading = isLoading || salesLoading;
 
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ["allEmployeeData"] });
@@ -154,27 +258,28 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Stat Cards */}
+      {/* Stat Cards — 3 cards: Active, Last Month Sales, This Year Sales */}
       <div className="flex gap-4">
         <StatCard
           title={labels.statActiveCount}
-          value={isLoading ? "—" : activeCount.toString()}
+          value={combinedLoading ? "—" : activeCount.toString()}
           icon={Activity}
-          loading={isLoading}
+          loading={combinedLoading}
           accent="text-emerald-600"
         />
         <StatCard
-          title="On Hold Employees"
-          value={isLoading ? "—" : onHoldCount.toString()}
-          icon={PauseCircle}
-          loading={isLoading}
-          accent="text-amber-600"
+          title={`Total Sales (${lastMonthLabel})`}
+          value={combinedLoading ? "—" : formatRupeeAmount(lastMonthSales)}
+          icon={TrendingUp}
+          loading={combinedLoading}
+          accent="text-indigo-600"
         />
         <StatCard
-          title={labels.statTotalEmployees}
-          value={isLoading ? "—" : totalCount.toString()}
-          icon={Users}
-          loading={isLoading}
+          title={`Total Sales (${new Date().getFullYear()})`}
+          value={combinedLoading ? "—" : formatRupeeAmount(currentYearSales)}
+          icon={TrendingUp}
+          loading={combinedLoading}
+          accent="text-violet-600"
         />
       </div>
 

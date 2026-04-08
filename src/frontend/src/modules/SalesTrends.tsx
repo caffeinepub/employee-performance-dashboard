@@ -26,7 +26,9 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
+  Legend,
   Line,
+  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -47,6 +49,7 @@ const CHART_COLORS = [
   "#8b5cf6",
   "#06b6d4",
   "#f97316",
+  "#ec4899",
 ];
 
 const MONTH_LABELS = [
@@ -65,14 +68,15 @@ const MONTH_LABELS = [
 ];
 
 const PAGE_SIZE = 15;
-type ViewMode = "yearly" | "half-yearly" | "monthly" | "daily";
+type ViewMode = "yearly" | "half-yearly" | "monthly" | "weekly" | "daily";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatRupees(n: number): string {
-  if (n >= 1_00_000) return `\u20b9${(n / 1_00_000).toFixed(1)}L`;
-  if (n >= 1000) return `\u20b9${(n / 1000).toFixed(1)}K`;
-  return `\u20b9${n}`;
+  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(1)}Cr`;
+  if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(1)}L`;
+  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
+  return `₹${n}`;
 }
 
 function parseDateParts(dateStr: string): {
@@ -82,7 +86,6 @@ function parseDateParts(dateStr: string): {
 } {
   if (!dateStr) return { year: Number.NaN, month: Number.NaN, day: Number.NaN };
   const v = dateStr.trim();
-  // ISO string (contains T separator)
   if (v.includes("T")) {
     const d = new Date(v);
     if (!Number.isNaN(d.getTime())) {
@@ -94,16 +97,22 @@ function parseDateParts(dateStr: string): {
     }
   }
   const parts = v.split("-").map(Number);
-  if (parts[0] > 31) {
-    // YYYY-MM-DD
-    return { year: parts[0], month: parts[1], day: parts[2] };
-  }
-  // DD-MM-YYYY
+  if (parts[0] > 31) return { year: parts[0], month: parts[1], day: parts[2] };
   return { year: parts[2], month: parts[1], day: parts[0] };
 }
 
+function getIsoWeek(dateStr: string): { week: number; year: number } {
+  const { year, month, day } = parseDateParts(dateStr);
+  if (Number.isNaN(year)) return { week: 0, year: 0 };
+  const d = new Date(year, month - 1, day);
+  const jan1 = new Date(year, 0, 1);
+  const dayOfYear = Math.ceil((d.getTime() - jan1.getTime()) / 86400000) + 1;
+  const week = Math.ceil((dayOfYear + jan1.getDay()) / 7);
+  return { week, year };
+}
+
 function formatDisplayDate(dateStr: string): string {
-  if (!dateStr) return "\u2014";
+  if (!dateStr) return "—";
   if (dateStr.includes("T")) {
     const d = new Date(dateStr);
     if (!Number.isNaN(d.getTime())) {
@@ -124,7 +133,6 @@ interface FSEOption {
   name: string;
   region: string;
 }
-
 interface FSEComboboxProps {
   options: FSEOption[];
   value: string;
@@ -136,7 +144,6 @@ function FSECombobox({ options, value, onChange }: FSEComboboxProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
   const selectedEmployee = options.find((o) => o.fiplCode === value);
 
   const filtered = useMemo(() => {
@@ -165,25 +172,6 @@ function FSECombobox({ options, value, onChange }: FSEComboboxProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [value]);
 
-  function handleSelect(code: string) {
-    onChange(code);
-    setSearchText("");
-    setOpen(false);
-  }
-
-  function handleClear(e: React.MouseEvent) {
-    e.stopPropagation();
-    onChange("");
-    setSearchText("");
-    setOpen(false);
-  }
-
-  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setSearchText(e.target.value);
-    if (value) onChange("");
-    setOpen(true);
-  }
-
   return (
     <div ref={wrapperRef} className="relative" data-ocid="fse.select">
       <div
@@ -206,14 +194,23 @@ function FSECombobox({ options, value, onChange }: FSEComboboxProps) {
           className="flex-1 outline-none bg-transparent placeholder:text-muted-foreground text-sm min-w-0"
           placeholder="Search FSE by name or FIPL..."
           value={selectedEmployee ? selectedEmployee.name : searchText}
-          onChange={handleInputChange}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            if (value) onChange("");
+            setOpen(true);
+          }}
           onFocus={() => setOpen(true)}
           data-ocid="fse.search_input"
         />
         {value ? (
           <button
             type="button"
-            onClick={handleClear}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              setSearchText("");
+              setOpen(false);
+            }}
             className="text-muted-foreground hover:text-foreground"
           >
             <X className="w-3.5 h-3.5" />
@@ -236,10 +233,12 @@ function FSECombobox({ options, value, onChange }: FSEComboboxProps) {
               <button
                 key={o.fiplCode}
                 type="button"
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2 ${
-                  o.fiplCode === value ? "bg-accent" : ""
-                }`}
-                onClick={() => handleSelect(o.fiplCode)}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2 ${o.fiplCode === value ? "bg-accent" : ""}`}
+                onClick={() => {
+                  onChange(o.fiplCode);
+                  setSearchText("");
+                  setOpen(false);
+                }}
               >
                 <span className="font-medium truncate">{o.name}</span>
                 <span className="text-xs text-muted-foreground font-mono shrink-0">
@@ -256,14 +255,22 @@ function FSECombobox({ options, value, onChange }: FSEComboboxProps) {
 
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────────────
 
-function RupeesTooltip({ active, payload, label }: any) {
+function RupeesTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color?: string }>;
+  label?: string;
+}) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover border border-border rounded-lg px-4 py-3 shadow-xl text-sm">
       <p className="font-semibold text-foreground mb-2 border-b border-border pb-1.5">
         {label}
       </p>
-      {payload.map((p: any) => (
+      {payload.map((p) => (
         <p
           key={p.name}
           style={{ color: p.color ?? "#6366f1" }}
@@ -286,7 +293,6 @@ export default function SalesTrends() {
     useGoogleSheetSales();
   const isLoading = empLoading || salesLoading;
 
-  // Lookup map
   const empMap = useMemo(() => {
     const m: Record<string, { name: string; region: string }> = {};
     for (const e of employees)
@@ -294,7 +300,6 @@ export default function SalesTrends() {
     return m;
   }, [employees]);
 
-  // Filter options
   const availableYears = useMemo(() => {
     const years = new Set<number>();
     for (const s of allSales) {
@@ -317,7 +322,11 @@ export default function SalesTrends() {
   const [regionFilter, setRegionFilter] = useState("all");
   const [fseFilter, setFseFilter] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("monthly");
-  const [page, setPage] = useState(0);
+  // Transaction records additional filters
+  const [txDateFilter, setTxDateFilter] = useState("all");
+  const [txMonthFilter, setTxMonthFilter] = useState("all");
+  const [txYearFilter, setTxYearFilter] = useState("all");
+  const [txPage, setTxPage] = useState(0);
 
   // Default to most recent year
   useEffect(() => {
@@ -326,7 +335,7 @@ export default function SalesTrends() {
     }
   }, [availableYears, yearFilter]);
 
-  // Filtered sales
+  // Filtered sales (for chart/stats)
   const filteredSales = useMemo(() => {
     return allSales.filter((s) => {
       const { year, month, day } = parseDateParts(s.date);
@@ -334,7 +343,7 @@ export default function SalesTrends() {
       if (monthFilter !== "all" && month !== Number(monthFilter)) return false;
       if (dayFilter !== "all" && day !== Number(dayFilter)) return false;
       if (regionFilter !== "all") {
-        const region = empMap[s.fiplCode]?.region || (s.name && "");
+        const region = empMap[s.fiplCode]?.region || "";
         if (region !== regionFilter) return false;
       }
       if (fseFilter && s.fiplCode !== fseFilter) return false;
@@ -350,6 +359,37 @@ export default function SalesTrends() {
     empMap,
   ]);
 
+  // Available days/years for tx filters
+  const txAvailableYears = useMemo(() => {
+    const s = new Set<number>();
+    for (const sale of filteredSales) {
+      const { year } = parseDateParts(sale.date);
+      if (!Number.isNaN(year)) s.add(year);
+    }
+    return Array.from(s).sort((a, b) => b - a);
+  }, [filteredSales]);
+
+  const txAvailableDays = useMemo(() => {
+    const s = new Set<number>();
+    for (const sale of filteredSales) {
+      const { day } = parseDateParts(sale.date);
+      if (!Number.isNaN(day)) s.add(day);
+    }
+    return Array.from(s).sort((a, b) => a - b);
+  }, [filteredSales]);
+
+  // Transaction-table-specific filtered sales
+  const txFilteredSales = useMemo(() => {
+    return filteredSales.filter((s) => {
+      const { year, month, day } = parseDateParts(s.date);
+      if (txYearFilter !== "all" && year !== Number(txYearFilter)) return false;
+      if (txMonthFilter !== "all" && month !== Number(txMonthFilter))
+        return false;
+      if (txDateFilter !== "all" && day !== Number(txDateFilter)) return false;
+      return true;
+    });
+  }, [filteredSales, txYearFilter, txMonthFilter, txDateFilter]);
+
   // Summary stats
   const totalAmount = useMemo(
     () => filteredSales.reduce((acc, s) => acc + s.amount, 0),
@@ -361,6 +401,25 @@ export default function SalesTrends() {
 
   // Chart 1: Sales Trend grouped by viewMode
   const trendData = useMemo(() => {
+    if (viewMode === "weekly") {
+      const acc: Record<string, number> = {};
+      const order: string[] = [];
+      for (const s of filteredSales) {
+        const { week, year } = getIsoWeek(s.date);
+        if (!week) continue;
+        const key = `Wk${week} ${year}`;
+        if (!(key in acc)) order.push(key);
+        acc[key] = (acc[key] || 0) + s.amount;
+      }
+      // Sort by year then week
+      order.sort((a, b) => {
+        const [wa, ya] = a.replace("Wk", "").split(" ").map(Number);
+        const [wb, yb] = b.replace("Wk", "").split(" ").map(Number);
+        return ya !== yb ? ya - yb : wa - wb;
+      });
+      return order.map((period) => ({ period, amount: acc[period] }));
+    }
+
     const acc: Record<string, number> = {};
     for (const s of filteredSales) {
       const { year, month, day } = parseDateParts(s.date);
@@ -376,7 +435,7 @@ export default function SalesTrends() {
       } else if (viewMode === "daily") {
         key = String(day).padStart(2, "0");
       }
-      acc[key] = (acc[key] || 0) + s.amount;
+      if (key) acc[key] = (acc[key] || 0) + s.amount;
     }
     const entries = Object.entries(acc);
     if (viewMode === "monthly" && yearFilter !== "all") {
@@ -393,7 +452,37 @@ export default function SalesTrends() {
     return entries.map(([period, amount]) => ({ period, amount }));
   }, [filteredSales, viewMode, yearFilter]);
 
-  // Average for reference line
+  // All Years multi-line pivot data
+  const allYearsData = useMemo(() => {
+    if (yearFilter !== "all") return null;
+    // Collect unique years in filteredSales
+    const yearsSet = new Set<number>();
+    for (const s of filteredSales) {
+      const { year } = parseDateParts(s.date);
+      if (!Number.isNaN(year)) yearsSet.add(year);
+    }
+    const years = Array.from(yearsSet).sort((a, b) => a - b);
+
+    // Pivot: {month: 'Jan', 2023: amount, 2024: amount, ...}
+    const pivot: Record<string, Record<number, number>> = {};
+    for (const label of MONTH_LABELS) pivot[label] = {};
+
+    for (const s of filteredSales) {
+      const { year, month } = parseDateParts(s.date);
+      if (Number.isNaN(year) || Number.isNaN(month)) continue;
+      const label = MONTH_LABELS[month - 1];
+      pivot[label][year] = (pivot[label][year] || 0) + s.amount;
+    }
+
+    const data = MONTH_LABELS.map((month) => {
+      const row: Record<string, number | string> = { month };
+      for (const y of years) row[String(y)] = pivot[month][y] || 0;
+      return row;
+    });
+
+    return { data, years };
+  }, [filteredSales, yearFilter]);
+
   const trendAverage = useMemo(() => {
     if (trendData.length === 0) return 0;
     return trendData.reduce((s, d) => s + d.amount, 0) / trendData.length;
@@ -414,9 +503,8 @@ export default function SalesTrends() {
   // Chart 3: FSE-wise top 10
   const fseData = useMemo(() => {
     const acc: Record<string, number> = {};
-    for (const s of filteredSales) {
+    for (const s of filteredSales)
       acc[s.fiplCode] = (acc[s.fiplCode] || 0) + s.amount;
-    }
     return Object.entries(acc)
       .map(([code, amount]) => ({
         code,
@@ -427,11 +515,11 @@ export default function SalesTrends() {
       .slice(0, 10);
   }, [filteredSales, empMap]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredSales.length / PAGE_SIZE);
-  const paginatedSales = filteredSales.slice(
-    page * PAGE_SIZE,
-    (page + 1) * PAGE_SIZE,
+  // Pagination for transaction records
+  const txTotalPages = Math.ceil(txFilteredSales.length / PAGE_SIZE);
+  const txPaginatedSales = txFilteredSales.slice(
+    txPage * PAGE_SIZE,
+    (txPage + 1) * PAGE_SIZE,
   );
 
   const fseOptions: FSEOption[] = employees.map((e) => ({
@@ -439,6 +527,14 @@ export default function SalesTrends() {
     name: e.name,
     region: e.region,
   }));
+
+  const VIEW_MODES: { value: ViewMode; label: string }[] = [
+    { value: "yearly", label: "Yearly" },
+    { value: "half-yearly", label: "Half-Yearly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "weekly", label: "Weekly" },
+    { value: "daily", label: "Daily" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -468,12 +564,10 @@ export default function SalesTrends() {
       <Card>
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-wrap gap-3" data-ocid="filters.panel">
-            {/* Year */}
             <Select
               value={yearFilter}
               onValueChange={(v) => {
                 setYearFilter(v);
-                setPage(0);
               }}
             >
               <SelectTrigger className="w-32" data-ocid="year.select">
@@ -489,13 +583,11 @@ export default function SalesTrends() {
               </SelectContent>
             </Select>
 
-            {/* Month */}
             <Select
               value={monthFilter}
               onValueChange={(v) => {
                 setMonthFilter(v);
                 setDayFilter("all");
-                setPage(0);
               }}
             >
               <SelectTrigger className="w-36" data-ocid="month.select">
@@ -511,12 +603,10 @@ export default function SalesTrends() {
               </SelectContent>
             </Select>
 
-            {/* Day */}
             <Select
               value={dayFilter}
               onValueChange={(v) => {
                 setDayFilter(v);
-                setPage(0);
               }}
               disabled={monthFilter === "all"}
             >
@@ -533,12 +623,10 @@ export default function SalesTrends() {
               </SelectContent>
             </Select>
 
-            {/* Region */}
             <Select
               value={regionFilter}
               onValueChange={(v) => {
                 setRegionFilter(v);
-                setPage(0);
               }}
             >
               <SelectTrigger className="w-36" data-ocid="region.select">
@@ -554,14 +642,12 @@ export default function SalesTrends() {
               </SelectContent>
             </Select>
 
-            {/* FSE Searchable */}
             <div className="min-w-[220px] flex-1">
               <FSECombobox
                 options={fseOptions}
                 value={fseFilter}
                 onChange={(v) => {
                   setFseFilter(v);
-                  setPage(0);
                 }}
               />
             </div>
@@ -574,25 +660,21 @@ export default function SalesTrends() {
         className="flex gap-1 p-1 bg-muted rounded-lg w-fit"
         data-ocid="view.tab"
       >
-        {(["yearly", "half-yearly", "monthly", "daily"] as ViewMode[]).map(
-          (mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setViewMode(mode)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize ${
-                viewMode === mode
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              data-ocid={`view.${mode}.tab`}
-            >
-              {mode === "half-yearly"
-                ? "Half-Yearly"
-                : mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ),
-        )}
+        {VIEW_MODES.map(({ value: mode, label }) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setViewMode(mode)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              viewMode === mode
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-ocid={`view.${mode}.tab`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Stat Cards */}
@@ -649,8 +731,8 @@ export default function SalesTrends() {
                 <CardContent className="pt-5">
                   <p className="text-2xl font-bold tabular-nums">
                     {avgPerTransaction > 0
-                      ? `\u20b9${avgPerTransaction.toLocaleString("en-IN")}`
-                      : "\u2014"}
+                      ? `₹${avgPerTransaction.toLocaleString("en-IN")}`
+                      : "—"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <Users className="w-3 h-3" /> Avg per Transaction
@@ -679,7 +761,7 @@ export default function SalesTrends() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Sales Trend — executive-grade area chart */}
+        {/* Tab 1: Sales Trend */}
         <TabsContent value="trend">
           <Card>
             <CardHeader className="pb-2">
@@ -687,13 +769,60 @@ export default function SalesTrends() {
                 <TrendingUp className="w-4 h-4 text-indigo-500" />
                 Total Sales Trend
                 <Badge variant="outline" className="text-xs ml-auto capitalize">
-                  {viewMode === "half-yearly" ? "Half-Yearly" : viewMode}
+                  {yearFilter === "all"
+                    ? "All Years (Year vs Year)"
+                    : viewMode === "half-yearly"
+                      ? "Half-Yearly"
+                      : viewMode}
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <Skeleton className="h-[380px] w-full" />
+              ) : yearFilter === "all" && allYearsData ? (
+                /* ── All Years: multi-line year vs year comparison ── */
+                allYearsData.data.every((d) =>
+                  allYearsData.years.every(
+                    (y) => (d[String(y)] as number) === 0,
+                  ),
+                ) ? (
+                  <div
+                    className="h-[380px] flex items-center justify-center text-muted-foreground text-sm"
+                    data-ocid="trend_chart.empty_state"
+                  >
+                    No data for selected filters
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={380}>
+                    <LineChart
+                      data={allYearsData.data}
+                      margin={{ top: 20, right: 48, bottom: 20, left: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                      <YAxis
+                        tickFormatter={(v: number) => formatRupees(v)}
+                        tick={{ fontSize: 11 }}
+                        width={72}
+                      />
+                      <Tooltip content={<RupeesTooltip />} />
+                      <Legend />
+                      {allYearsData.years.map((year, idx) => (
+                        <Line
+                          key={year}
+                          type="monotone"
+                          dataKey={String(year)}
+                          name={String(year)}
+                          stroke={CHART_COLORS[idx % CHART_COLORS.length]}
+                          strokeWidth={2.5}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                )
               ) : trendData.length === 0 ? (
                 <div
                   className="h-[380px] flex items-center justify-center text-muted-foreground text-sm"
@@ -891,7 +1020,7 @@ export default function SalesTrends() {
                       tick={{ fontSize: 11 }}
                       width={120}
                       tickFormatter={(v: string) =>
-                        v.length > 15 ? `${v.slice(0, 14)}\u2026` : v
+                        v.length > 15 ? `${v.slice(0, 14)}…` : v
                       }
                     />
                     <Tooltip content={<RupeesTooltip />} />
@@ -920,12 +1049,93 @@ export default function SalesTrends() {
         </TabsContent>
       </Tabs>
 
-      {/* Records Table */}
+      {/* Transaction Records */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Transaction Records</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent>
+          {/* Transaction-specific filters */}
+          <div
+            className="flex flex-wrap gap-3 mb-4 pb-4 border-b"
+            data-ocid="tx_filters.panel"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Filter records by:
+              </span>
+            </div>
+            {/* Tx Year */}
+            <Select
+              value={txYearFilter}
+              onValueChange={(v) => {
+                setTxYearFilter(v);
+                setTxPage(0);
+              }}
+            >
+              <SelectTrigger className="w-32" data-ocid="tx_year.select">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent className="max-h-56 overflow-y-auto">
+                <SelectItem value="all">All Years</SelectItem>
+                {txAvailableYears.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Tx Month */}
+            <Select
+              value={txMonthFilter}
+              onValueChange={(v) => {
+                setTxMonthFilter(v);
+                setTxPage(0);
+              }}
+            >
+              <SelectTrigger className="w-36" data-ocid="tx_month.select">
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent className="max-h-56 overflow-y-auto">
+                <SelectItem value="all">All Months</SelectItem>
+                {MONTH_LABELS.map((label, i) => (
+                  <SelectItem key={label} value={String(i + 1)}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Tx Date */}
+            <Select
+              value={txDateFilter}
+              onValueChange={(v) => {
+                setTxDateFilter(v);
+                setTxPage(0);
+              }}
+            >
+              <SelectTrigger className="w-28" data-ocid="tx_date.select">
+                <SelectValue placeholder="Date" />
+              </SelectTrigger>
+              <SelectContent className="max-h-56 overflow-y-auto">
+                <SelectItem value="all">All Dates</SelectItem>
+                {txAvailableDays.map((d) => (
+                  <SelectItem key={String(d)} value={String(d)}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center ml-auto">
+              <Badge variant="outline" className="text-xs font-normal">
+                {txFilteredSales.length} results
+              </Badge>
+            </div>
+          </div>
+
+          {/* Records Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -938,7 +1148,7 @@ export default function SalesTrends() {
                     "Product",
                     "Type",
                     "Qty",
-                    "Amount (\u20b9)",
+                    "Amount (₹)",
                   ].map((h) => (
                     <th
                       key={h}
@@ -964,7 +1174,7 @@ export default function SalesTrends() {
                       </div>
                     </td>
                   </tr>
-                ) : paginatedSales.length === 0 ? (
+                ) : txPaginatedSales.length === 0 ? (
                   <tr>
                     <td
                       colSpan={8}
@@ -975,7 +1185,7 @@ export default function SalesTrends() {
                     </td>
                   </tr>
                 ) : (
-                  paginatedSales.map((s, idx) => {
+                  txPaginatedSales.map((s, idx) => {
                     const emp = empMap[s.fiplCode];
                     return (
                       <tr
@@ -995,7 +1205,7 @@ export default function SalesTrends() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          {emp?.region || "\u2014"}
+                          {emp?.region || "—"}
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant="secondary" className="text-xs">
@@ -1024,18 +1234,18 @@ export default function SalesTrends() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t">
+          {txTotalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t mt-4">
               <p className="text-xs text-muted-foreground">
-                Page {page + 1} of {totalPages} &middot; {filteredSales.length}{" "}
-                results
+                Page {txPage + 1} of {txTotalPages} &middot;{" "}
+                {txFilteredSales.length} results
               </p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   className="text-xs px-3 py-1.5 border rounded-md hover:bg-muted disabled:opacity-40 transition-colors"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => p - 1)}
+                  disabled={txPage === 0}
+                  onClick={() => setTxPage((p) => p - 1)}
                   data-ocid="records_table.pagination_prev"
                 >
                   Prev
@@ -1043,8 +1253,8 @@ export default function SalesTrends() {
                 <button
                   type="button"
                   className="text-xs px-3 py-1.5 border rounded-md hover:bg-muted disabled:opacity-40 transition-colors"
-                  disabled={page >= totalPages - 1}
-                  onClick={() => setPage((p) => p + 1)}
+                  disabled={txPage >= txTotalPages - 1}
+                  onClick={() => setTxPage((p) => p + 1)}
                   data-ocid="records_table.pagination_next"
                 >
                   Next
