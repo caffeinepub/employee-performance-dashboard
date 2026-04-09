@@ -59,7 +59,12 @@ function AppContent() {
   const renderModule = () => {
     switch (activeModule) {
       case "dashboard":
-        return <Dashboard onSelectEmployee={handleSelectEmployee} />;
+        return (
+          <Dashboard
+            onSelectEmployee={handleSelectEmployee}
+            onNavigateToSales={() => handleNavigate("sales")}
+          />
+        );
       case "employees":
         if (selectedFiplCode) {
           return (

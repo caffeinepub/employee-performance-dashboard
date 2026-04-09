@@ -52,7 +52,7 @@ const KNOWN_ISSUE_TYPES = [
   "Technical/Product Issue",
   "After-Sales & Support Issue",
   "Satisfied",
-  "Sent Google Form",
+  "Feedback-Form Sent",
 ];
 
 // ─── Issue Category Classification ───────────────────────────────────────────
@@ -87,10 +87,15 @@ export const ISSUE_CATEGORIES = [
       "bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-200",
   },
   {
-    key: "Satisfied and Google Form Sent",
-    label: "Satisfied / Google Form",
+    key: "Satisfied",
+    label: "Satisfied",
     color:
       "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200",
+  },
+  {
+    key: "FeedbackFormSent",
+    label: "Feedback-Form Sent",
+    color: "bg-sky-100 text-sky-800 border-sky-300 hover:bg-sky-200",
   },
   {
     key: "Wow Factor",
@@ -118,12 +123,12 @@ export function classifyIssue(rawText: string): CategoryKey[] {
     matched.push("Technical and Product Issue");
   if (t.includes("after") || t.includes("support"))
     matched.push("After-Sales Issue");
-  if (
-    t.includes("satisf") ||
-    t.includes("google form") ||
-    t.includes("sent google")
-  )
-    matched.push("Satisfied and Google Form Sent");
+  // "Satisfied" — matches "satisf" but NOT google/form keywords
+  const hasGoogle =
+    t.includes("google") || t.includes("sent google") || t.includes("form");
+  if (t.includes("satisf") && !hasGoogle) matched.push("Satisfied");
+  // "FeedbackFormSent" — matches google form / sent google / form keywords
+  if (hasGoogle) matched.push("FeedbackFormSent");
   if (t.includes("wow")) matched.push("Wow Factor");
   return matched;
 }
@@ -434,7 +439,8 @@ export default function Feedback() {
       "Brand Issue": 0,
       "Technical and Product Issue": 0,
       "After-Sales Issue": 0,
-      "Satisfied and Google Form Sent": 0,
+      Satisfied: 0,
+      FeedbackFormSent: 0,
       "Wow Factor": 0,
     };
     for (const r of allRecords) {

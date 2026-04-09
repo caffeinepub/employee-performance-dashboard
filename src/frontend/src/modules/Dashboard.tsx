@@ -74,15 +74,21 @@ function StatCard({
   icon: Icon,
   loading,
   accent,
+  onClick,
 }: {
   title: string;
   value: string;
   icon: React.ElementType;
   loading?: boolean;
   accent?: string;
+  onClick?: () => void;
 }) {
   return (
-    <Card className="flex-1">
+    <Card
+      className={`flex-1 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow hover:ring-1 hover:ring-primary/30" : ""}`}
+      onClick={onClick}
+      data-ocid={onClick ? "dashboard.clickable_stat" : undefined}
+    >
       <CardContent className="pt-5 pb-5">
         <div className="flex items-center justify-between">
           <div>
@@ -96,6 +102,11 @@ function StatCard({
                 className={`text-3xl font-bold ${accent ?? "text-foreground"}`}
               >
                 {value}
+              </p>
+            )}
+            {onClick && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                <span>View Sales Trend →</span>
               </p>
             )}
           </div>
@@ -133,8 +144,10 @@ function getRankBadge(rank: number) {
 
 export default function Dashboard({
   onSelectEmployee,
+  onNavigateToSales,
 }: {
   onSelectEmployee?: (fiplCode: string) => void;
+  onNavigateToSales?: () => void;
 }) {
   const queryClient = useQueryClient();
   const { data, isLoading, isFetching, isError } = useGoogleSheetData();
@@ -261,6 +274,7 @@ export default function Dashboard({
           icon={TrendingUp}
           loading={combinedLoading}
           accent="text-indigo-600"
+          onClick={onNavigateToSales}
         />
         <StatCard
           title={`Total Sales (${new Date().getFullYear()})`}
@@ -268,6 +282,7 @@ export default function Dashboard({
           icon={TrendingUp}
           loading={combinedLoading}
           accent="text-violet-600"
+          onClick={onNavigateToSales}
         />
       </div>
 

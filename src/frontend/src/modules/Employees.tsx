@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PasswordGate } from "../components/PasswordGate";
+import { PasswordGate, usePasswordGate } from "../components/PasswordGate";
 import {
   type EmployeeRecord,
   useAllEmployeeData,
@@ -412,6 +412,15 @@ export default function Employees({
   const [form, setForm] = useState<Employee>(EMPTY_EMPLOYEE);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  // Password gate for Actions (Edit/Delete)
+  const { granted: actionsGranted, grant: grantActions } =
+    usePasswordGate("employee-actions");
+  const [pendingAction, setPendingAction] = useState<
+    | { type: "edit"; emp: Employee }
+    | { type: "delete"; fiplCode: string }
+    | null
+  >(null);
+
   const categories = useMemo(() => {
     const cats = new Set(employees.map((e) => e.fseCategory).filter(Boolean));
     return Array.from(cats).sort();
@@ -468,6 +477,33 @@ export default function Employees({
     setEditingEmployee(emp);
     setForm({ ...emp });
     setDialogOpen(true);
+  };
+
+  // Password-gated handlers for Edit and Delete
+  const handleEditRequest = (emp: Employee) => {
+    if (actionsGranted) {
+      openEdit(emp);
+    } else {
+      setPendingAction({ type: "edit", emp });
+    }
+  };
+
+  const handleDeleteRequest = (fiplCode: string) => {
+    if (actionsGranted) {
+      setDeleteTarget(fiplCode);
+    } else {
+      setPendingAction({ type: "delete", fiplCode });
+    }
+  };
+
+  const handleActionsUnlock = () => {
+    grantActions();
+    if (pendingAction?.type === "edit") {
+      openEdit(pendingAction.emp);
+    } else if (pendingAction?.type === "delete") {
+      setDeleteTarget(pendingAction.fiplCode);
+    }
+    setPendingAction(null);
   };
 
   const handleSave = async () => {
@@ -706,8 +742,8 @@ export default function Employees({
                       lastSalesYM={lastSalesYM}
                       lastAttendanceYM={lastAttendanceYM}
                       onSelect={onSelectEmployee}
-                      onEdit={openEdit}
-                      onDelete={(fipl) => setDeleteTarget(fipl)}
+                      onEdit={handleEditRequest}
+                      onDelete={handleDeleteRequest}
                     />
                   ))
                 )}
@@ -907,6 +943,15 @@ export default function Employees({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Password Gate for Actions (Edit/Delete) */}
+      {pendingAction && (
+        <PasswordGate
+          gateKey="employee-actions"
+          onUnlock={handleActionsUnlock}
+          onCancel={() => setPendingAction(null)}
+        />
+      )}
     </div>
   );
 }
